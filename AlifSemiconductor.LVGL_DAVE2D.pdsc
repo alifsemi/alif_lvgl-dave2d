@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" schemaVersion="1.7.7" xs:noNamespaceSchemaLocation="https://raw.githubusercontent.com/Open-CMSIS-Pack/Open-CMSIS-Pack-Spec/v1.7.7/schema/PACK.xsd">
+  <vendor>AlifSemiconductor</vendor>
+  <name>LVGL_DAVE2D</name>
+  <description>Alif Semiconductor D/AVE2D driver CMSIS package</description>
+  <url>https://github.com/alifsemi/alif_lvgl_dave2d/raw/main/</url>
+  <supportContact>support@alifsemi.com</supportContact>
+  <!-- optional license file -->
+  <!--
+  <license>
+  </license>
+  -->
+
+  <releases>
+    <release version="1.0.0" date="2024-05-23">
+      Initial release
+    </release>
+  </releases>
+
+  <requirements>
+    <packages>
+      <package name="Dave2DDriver"  vendor="AlifSemiconductor"/>
+      <package name="lvgl"          vendor="LVGL" version="9.1.0:9.1.99"/>
+    </packages>
+  </requirements>
+
+  <keywords>
+    <!-- keywords for indexing -->
+    <keyword>Alif Semiconductor</keyword>
+    <keyword>LVGL</keyword>
+    <keyword>GPU2D</keyword>
+    <keyword>D/AVE2D</keyword>
+    <keyword>Dave2d</keyword>
+  </keywords>
+
+  <conditions>
+    <condition id="LVGL-GPU AlifSemi-Dave2D">
+      <description>Condition for AlifSemi-Dave2D</description>
+      <require Cclass="LVGL" Cgroup="Essential"/>
+      <require Cclass="Graphics" Cgroup="DAVE2D" Csub="Layer2"/>
+      <deny Cclass="LVGL" Cgroup="LVGL9" Csub="GPU STM32-DMA2D"/>
+      <deny Cclass="LVGL" Cgroup="LVGL9" Csub="GPU SWM341-DMA2D"/>
+      <deny Cclass="LVGL" Cgroup="LVGL9" Csub="GPU NXP-PXP"/>
+      <deny Cclass="LVGL" Cgroup="LVGL9" Csub="GPU NXP-VGLite"/>
+      <deny Cclass="LVGL" Cgroup="LVGL9" Csub="GPU VG-Lite"/>
+      <deny Cclass="LVGL" Cgroup="LVGL9" Csub="GPU GD32-IPA"/>
+      <deny Cclass="LVGL" Cgroup="LVGL9" Csub="GPU Renesas-Dave2D"/>
+    </condition>
+  </conditions>
+
+  <components>
+    <component Cclass="Graphics" Cgroup="Acceleration" Csub="GPU AlifSemi-Dave2D" Cversion="1.0.0" condition="LVGL-GPU AlifSemi-Dave2D">
+      <description>An hardware acceleration from Alif Semiconductor Dave2D</description>
+      <files>
+        <!-- include folder / device header file -->
+        <file category="include"  name="lv_dave2d/inc/"/>
+        <!-- include headers -->
+        <file category="header"   name="lv_dave2d/inc/hal_data.h"/>
+        <file category="header"   name="lv_dave2d/inc/lv_draw_dave2d.h"/>
+        <file category="header"   name="lv_dave2d/inc/lv_draw_dave2d_utils.h"/>
+        <!-- source files -->
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_arc.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_border.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_fill.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_image.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_label.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_line.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_mask_rectangle.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_triangle.c"/>
+        <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_utils.c"/>
+        <!-- config header -->
+        <file category="header"   name="lv_dave2d/lv_dave2d_cfg.h" attr="config" version="1.0.0"/>
+      </files>
+
+      <RTE_Components_h>
+
+/*! \brief enable Dave2D */
+#define LV_USE_DRAW_DAVE2D  1
+      </RTE_Components_h>
+    </component>
+  </components>
+</package>

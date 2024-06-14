@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Version: 3.1
+# Date: 2024-04-17
+# This bash script generates a CMSIS Software Pack:
+#
+
+set -o pipefail
+
+# Set version of gen pack library
+# For available versions see https://github.com/Open-CMSIS-Pack/gen-pack/tags.
+# Use the tag name without the prefix "v", e.g., 0.7.0
+REQUIRED_GEN_PACK_LIB="0.11.1"
+
+# Set default command line arguments
+DEFAULT_ARGS="-v"
+
+# Pack warehouse directory - destination
+# Default: ./output
+#
+# PACK_OUTPUT=./output
+
+# Temporary pack build directory,
+# Default: ./build
+#
+# PACK_BUILD=./build
+
+# Specify directory names to be added to pack base directory
+# An empty list defaults to all folders next to this script.
+# Default: empty (all folders)
+#
+# PACK_DIRS="
+#   <list directories here>
+# "
+
+# Specify file names to be added to pack base directory
+# Default: empty
+#
+# PACK_BASE_FILES="
+#   <list files here>
+# "
+
+# Specify file names to be deleted from pack build directory
+# Default: empty
+#
+# PACK_DELETE_FILES="
+#   <list files here>
+# "
+
+# Specify patches to be applied
+# Default: empty
+#
+# PACK_PATCH_FILES="
+#     <list patches here>
+# "
+
+# Specify addition argument to packchk
+# Default: empty
+#
+# PACKCHK_ARGS=()
+
+# Specify additional dependencies for packchk
+# Default: empty
+#
+# TODO: remove this env variable when Dave2DDriver becomes public
+if [[ -z $AUTH_TOKEN ]]; then
+  echo 'ERROR: AUTH_TOKEN environment variable is not set'
+  exit 1
+fi
+
+PACKCHK_DEPS="
+  https://github.com/lvgl/lvgl/raw/v9.1.0/env_support/cmsis-pack/LVGL.lvgl.pdsc
+  https://raw.githubusercontent.com/AlifSemi-Sirin/alif_dave2d_driver/main/AlifSemiconductor.Dave2DDriver.pdsc?token=$AUTH_TOKEN
+"
+
+# Optional: restrict fallback modes for changelog generation
+# Default: full
+# Values:
+# - full      Tag annotations, release descriptions, or commit messages (in order)
+# - release   Tag annotations, or release descriptions (in order)
+# - tag       Tag annotations only
+#
+# PACK_CHANGELOG_MODE="<full|release|tag>"
+
+# Specify file patterns to be excluded from the checksum file
+# Default: <empty>
+# Values:
+# - empty          All files packaged are included in the checksum file
+# - glob pattern   One glob pattern per line. Files matching a given pattern are excluded
+#                  from the checksum file
+# - "*"            The * (match all pattern) can be used to skip checksum file creating completely.
+#
+# PACK_CHECKSUM_EXCLUDE="
+#   <list file patterns here>
+# "
+
+#
+# custom pre-processing steps
+#
+# usage: preprocess <build>
+#   <build>  The build folder
+#
+function preprocess() {
+  # add custom steps here to be executed
+  # before populating the pack build folder
+  return 0
+}
+
+#
+# custom post-processing steps
+#
+# usage: postprocess <build>
+#   <build>  The build folder
+#
+function postprocess() {
+  # add custom steps here to be executed
+  # after populating the pack build folder
+  # but before archiving the pack into output folder
+  return 0
+}
+
+############ DO NOT EDIT BELOW ###########
+
+# Set GEN_PACK_LIB_PATH to use a specific gen-pack library root
+# ... instead of bootstrap based on REQUIRED_GEN_PACK_LIB
+if [[ -f "${GEN_PACK_LIB_PATH}/gen-pack" ]]; then
+  . "${GEN_PACK_LIB_PATH}/gen-pack"
+else
+  . <(curl -sL "https://raw.githubusercontent.com/Open-CMSIS-Pack/gen-pack/main/bootstrap")
+fi
+
+gen_pack "${DEFAULT_ARGS[@]}" "$@"
+
+exit 0
