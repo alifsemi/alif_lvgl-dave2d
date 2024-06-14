@@ -5,22 +5,8 @@ This repository contains the integration layer between LVGL and D/AVE2D Layer 2 
 ## Requirements
 
 This CMSIS pack requires some packs to be installed and added to the project:
-* [AlifSemiconductor::Dave2DDriver@1.0.0](https://github.com/AlifSemi-Sirin/alif_dave2d_driver)
+* [AlifSemiconductor::Dave2DDriver@1.0.0](https://github.com/alifsemi/alif_dave2d-driver)
 * [LVGL::lvgl@9.1.0](https://github.com/lvgl/lvgl/tree/v9.1.0/env_support/cmsis-pack)
-
-
-### Note
-
-Dave2DDriver repository is not public currently which requires an access token to get .pdsc file.
-
-In order to get access token open [this](https://github.com/AlifSemi-Sirin/alif_dave2d_driver/raw/main/AlifSemiconductor.Dave2DDriver.pdsc) in your browser and copy the string after ?token=
-
-You can then generate a CMSIS pack using
-
-    AUTH_TOKEN=<copied token> ./gen_pack.sh
-
-
-This won't be needed after Dave2DDriver becomes public
 
 ## How to create and install CMSIS-Pack
 
