@@ -3,7 +3,7 @@
   <vendor>AlifSemiconductor</vendor>
   <name>LVGL_DAVE2D</name>
   <description>Alif Semiconductor D/AVE2D driver CMSIS package</description>
-  <url>https://github.com/alifsemi/alif_lvgl_dave2d/raw/main/</url>
+  <url>https://github.com/alifsemi/alif_lvgl-dave2d/raw/main/</url>
   <supportContact>support@alifsemi.com</supportContact>
   <!-- optional license file -->
   <!--
