@@ -61,15 +61,9 @@ DEFAULT_ARGS="-v"
 # Specify additional dependencies for packchk
 # Default: empty
 #
-# TODO: remove this env variable when Dave2DDriver becomes public
-if [[ -z $AUTH_TOKEN ]]; then
-  echo 'ERROR: AUTH_TOKEN environment variable is not set'
-  exit 1
-fi
-
 PACKCHK_DEPS="
   https://github.com/lvgl/lvgl/raw/v9.1.0/env_support/cmsis-pack/LVGL.lvgl.pdsc
-  https://raw.githubusercontent.com/AlifSemi-Sirin/alif_dave2d_driver/main/AlifSemiconductor.Dave2DDriver.pdsc?token=$AUTH_TOKEN
+  https://github.com/alifsemi/alif_dave2d-driver/releases/download/v1.0.1/AlifSemiconductor.Dave2DDriver.pdsc
 "
 
 # Optional: restrict fallback modes for changelog generation

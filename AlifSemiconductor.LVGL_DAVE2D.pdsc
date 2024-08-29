@@ -12,6 +12,9 @@
   -->
 
   <releases>
+    <release version="1.0.1" tag="v1.0.1" url="https://github.com/alifsemi/alif_lvgl-dave2d/releases/download/v1.0.1/AlifSemiconductor.LVGL_DAVE2D.1.0.1.pack" date="2024-08-29">
+      Fixe URLs and pack generation script
+    </release>
     <release version="1.0.0" tag="v1.0.0" url="https://github.com/alifsemi/alif_lvgl-dave2d/releases/download/v1.0.0/AlifSemiconductor.LVGL_DAVE2D.1.0.0.pack" date="2024-05-23">
       Initial release
     </release>
@@ -19,8 +22,8 @@
 
   <requirements>
     <packages>
-      <package name="Dave2DDriver"  vendor="AlifSemiconductor"/>
-      <package name="lvgl"          vendor="LVGL" version="9.1.0:9.1.99"/>
+      <package name="Dave2DDriver"  vendor="AlifSemiconductor" version="1.0.1"/>
+      <package name="lvgl"          vendor="LVGL"              version="9.1.0"/>
     </packages>
   </requirements>
 
