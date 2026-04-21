@@ -12,6 +12,9 @@
   -->
 
   <releases>
+    <release version="1.1.1" tag="v1.1.1" url="https://github.com/alifsemi/alif_lvgl-dave2d/releases/download/v1.1.1/AlifSemiconductor.LVGL_DAVE2D.1.1.1.pack" date="2026-04-21">
+      Define LV_USE_DRAW_DAVE2D in RTE_Components.h
+    </release>
     <release version="1.1.0" tag="v1.1.0" url="https://github.com/alifsemi/alif_lvgl-dave2d/releases/download/v1.1.0/AlifSemiconductor.LVGL_DAVE2D.1.1.0.pack" date="2026-04-06">
       Add LVGL 9.5 support
     </release>
