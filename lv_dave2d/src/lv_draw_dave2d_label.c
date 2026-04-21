@@ -1,6 +1,7 @@
 #include "lv_draw_dave2d.h"
 #include "src/draw/lv_draw_label_private.h"
 #include "src/misc/lv_area_private.h"
+#include <string.h>
 
 static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_t * glyph_draw_dsc,
                                           lv_draw_fill_dsc_t * fill_draw_dsc, const lv_area_t * fill_area);
@@ -180,7 +181,7 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
             case LV_FONT_GLYPH_FORMAT_A1 ... LV_FONT_GLYPH_FORMAT_A8:
 #if D2_LABEL_RENDER_EACH_LETTER
                 {
-                    lv_draw_buf_t * draw_buf = glyph_draw_dsc->glyph_data;
+                    lv_draw_buf_t * draw_buf = (lv_draw_buf_t *)glyph_draw_dsc->glyph_data;
 
                     lv_label_render(unit->d2_handle, &glyph_draw_dsc->color, glyph_draw_dsc->opa, &letter_coords, draw_buf);
 
@@ -188,7 +189,7 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
                 }
 #else
                 {
-                    lv_draw_buf_t * draw_buf = glyph_draw_dsc->glyph_data;
+                    const lv_draw_buf_t * draw_buf = glyph_draw_dsc->glyph_data;
 
                     lv_area_t letter_area;
                     letter_area.x1 = clip_area.x1 - letter_coords.x1;
