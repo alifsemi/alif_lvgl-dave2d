@@ -83,6 +83,8 @@
       </files>
 
       <RTE_Components_h>
+        /*! \brief enable Dave2D */
+        #define LV_USE_DRAW_DAVE2D  1
       </RTE_Components_h>
     </component>
   </components>
