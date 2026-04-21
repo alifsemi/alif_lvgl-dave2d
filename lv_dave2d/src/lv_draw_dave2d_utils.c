@@ -53,7 +53,7 @@ d2_color  lv_draw_dave2d_lv_colour_to_d2_colour(lv_color_t color)
     /*Color depth: 8 (A8), 16 (RGB565), 24 (RGB888), 32 (XRGB8888)*/
     switch(LV_COLOR_DEPTH) {
         case(8):
-            __BKPT(0);
+            LV_ASSERT(0);
             break;
         case(16):
             break;
@@ -127,7 +127,7 @@ d2_u32 lv_draw_dave2d_lv_colour_fmt_to_d2_fmt(lv_color_format_t colour_format)
             break;
 
         default:
-            __BKPT(0);
+            LV_ASSERT(0);
             break;
 
     }
@@ -149,8 +149,8 @@ void d2_framebuffer_from_layer(d2_device * handle, lv_layer_t * layer)
 
 void d2_utils_init(d2_device * handle)
 {
-    _lv_ll_init(&_d2_buf_1, sizeof(void *));
-    _lv_ll_init(&_d2_buf_2, sizeof(void *));
+    lv_ll_init(&_d2_buf_1, sizeof(void *));
+    lv_ll_init(&_d2_buf_2, sizeof(void *));
     _d2_buf_act = &_d2_buf_1;
     _d2_handle = handle;
 }
@@ -173,7 +173,7 @@ void d2_buf_copy(void * ptr, uint32_t size)
 
 void d2_buf_add(void * ptr)
 {
-    void ** new_node = _lv_ll_ins_tail(_d2_buf_act);
+    void ** new_node = lv_ll_ins_tail(_d2_buf_act);
     *new_node = ptr;
 }
 
@@ -206,7 +206,7 @@ void d2_finish_rendering(void)
 
 static void d2_buf_clear_cb(void * node)
 {
-    _lv_ll_remove(_d2_buf_act, node);
+    lv_ll_remove(_d2_buf_act, node);
     d1_freevidmem(d2_level1interface(_d2_handle), d1_mem_any, *(void **)node);
     lv_free(node);
 }
@@ -218,12 +218,12 @@ static void d2_buf_switch(void)
 
 static void d2_buf_clear(void)
 {
-    _lv_ll_clear_custom(_d2_buf_act, d2_buf_clear_cb);
+    lv_ll_clear_custom(_d2_buf_act, d2_buf_clear_cb);
 }
 
 static bool d2_buf_contains(d2_buf * buf, void * ptr)
 {
-    void ** next = _lv_ll_get_head(buf);
+    void ** next = lv_ll_get_head(buf);
 
     while (next != NULL)
     {
@@ -232,7 +232,7 @@ static bool d2_buf_contains(d2_buf * buf, void * ptr)
             return true;
         }
 
-        next = _lv_ll_get_next(buf, next);
+        next = lv_ll_get_next(buf, next);
     }
 
     return false;

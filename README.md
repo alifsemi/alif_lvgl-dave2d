@@ -6,7 +6,7 @@ This repository contains the integration layer between LVGL and D/AVE2D Layer 2 
 
 This CMSIS pack requires some packs to be installed and added to the project:
 * [AlifSemiconductor::Dave2DDriver@1.0.1](https://github.com/alifsemi/alif_dave2d-driver)
-* [LVGL::lvgl@9.1.0](https://github.com/lvgl/lvgl/tree/v9.1.0/env_support/cmsis-pack)
+* [LVGL::lvgl@>=9.5.0](https://github.com/lvgl/lvgl/tree/v9.5.0/env_support/cmsis-pack)
 
 ## How to create and install CMSIS-Pack
 
@@ -14,4 +14,4 @@ This CMSIS pack requires some packs to be installed and added to the project:
 2. Set `CMSIS_PACK_ROOT` environment variables to cmsis-packs installation directory.
 3. Run `./gen_pack.sh` script
 4. Install generated CMSIS pack by following command:
-`cpackget add ./output/AlifSemiconductor.LVGL_DAVE2D.1.0.2.pack`
+`cpackget add ./output/AlifSemiconductor.LVGL_DAVE2D.1.1.0.pack`

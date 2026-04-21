@@ -12,6 +12,9 @@
   -->
 
   <releases>
+    <release version="1.1.0" date="2026-04-06">
+      Add LVGL 9.5 support
+    </release>
     <release version="1.0.2" tag="v1.0.2" url="https://github.com/alifsemi/alif_lvgl-dave2d/releases/download/v1.0.2/AlifSemiconductor.LVGL_DAVE2D.1.0.2.pack" date="2024-09-26">
       Fix 32-bit color depth
     </release>
@@ -26,7 +29,7 @@
   <requirements>
     <packages>
       <package name="Dave2DDriver"  vendor="AlifSemiconductor" version="1.0.1"/>
-      <package name="lvgl"          vendor="LVGL"              version="9.1.0"/>
+      <package name="lvgl"          vendor="LVGL"              version="9.5.0"/>
     </packages>
   </requirements>
 
@@ -80,9 +83,6 @@
       </files>
 
       <RTE_Components_h>
-
-/*! \brief enable Dave2D */
-#define LV_USE_DRAW_DAVE2D  1
       </RTE_Components_h>
     </component>
   </components>

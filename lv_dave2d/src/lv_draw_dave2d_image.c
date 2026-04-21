@@ -7,6 +7,8 @@
  *      INCLUDES
  *********************/
 #include "lv_draw_dave2d.h"
+#include "src/draw/lv_image_decoder_private.h"
+#include "src/draw/lv_draw_image_private.h"
 
 /*********************
  *      DEFINES
@@ -19,7 +21,7 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * draw_dsc,
+static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
                           const lv_image_decoder_dsc_t * decoder_dsc, lv_draw_image_sup_t * sup,
                           const lv_area_t * img_coords, const lv_area_t * clipped_img_area);
 
@@ -35,14 +37,14 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
  *   GLOBAL FUNCTIONS
  **********************/
 
-void lv_draw_dave2d_image(lv_draw_dave2d_unit_t * draw_unit, const lv_draw_image_dsc_t * draw_dsc,
+void lv_draw_dave2d_image(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
                           const lv_area_t * coords)
 {
     if(!draw_dsc->tile) {
-        _lv_draw_image_normal_helper((lv_draw_unit_t *)draw_unit, draw_dsc, coords, img_draw_core);
+        lv_draw_image_normal_helper(t, draw_dsc, coords, img_draw_core, NULL);
     }
     else {
-        _lv_draw_image_tiled_helper((lv_draw_unit_t *)draw_unit, draw_dsc, coords, img_draw_core);
+        lv_draw_image_tiled_helper(t, draw_dsc, coords, img_draw_core, NULL);
     }
 }
 
@@ -50,12 +52,12 @@ void lv_draw_dave2d_image(lv_draw_dave2d_unit_t * draw_unit, const lv_draw_image
  *   STATIC FUNCTIONS
  **********************/
 
-static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * draw_dsc,
+static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
                           const lv_image_decoder_dsc_t * decoder_dsc, lv_draw_image_sup_t * sup,
                           const lv_area_t * img_coords, const lv_area_t * clipped_img_area)
 {
 
-    lv_draw_dave2d_unit_t * u = (lv_draw_dave2d_unit_t *)u_base;
+    lv_draw_dave2d_unit_t * u = (lv_draw_dave2d_unit_t *)t->draw_unit;
 
     (void)sup; //remove warning about unused parameter
 
@@ -91,17 +93,15 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
 #if LV_USE_OS
     lv_result_t  status;
     status = lv_mutex_lock(u->pd2Mutex);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
-    buffer_area = u->base_unit.target_layer->buf_area;
+    buffer_area = t->target_layer->buf_area;
     draw_area = *img_coords;
     clipped_area = *clipped_img_area;
 
-    x = 0 - u->base_unit.target_layer->buf_area.x1;
-    y = 0 - u->base_unit.target_layer->buf_area.y1;
+    x = 0 - t->target_layer->buf_area.x1;
+    y = 0 - t->target_layer->buf_area.y1;
 
     lv_area_move(&draw_area, x, y);
     lv_area_move(&buffer_area, x, y);
@@ -220,7 +220,7 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
 #endif
     }
 
-    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, t->target_layer);
 
     d2_cliprect(u->d2_handle, (d2_border)clipped_area.x1, (d2_border)clipped_area.y1, (d2_border)clipped_area.x2,
                 (d2_border)clipped_area.y2);
@@ -244,11 +244,9 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
     }
     else if(LV_BLEND_MODE_SUBTRACTIVE == draw_dsc->blend_mode) { /**< Subtract the foreground from the background*/
         /* TODO */
-        __NOP();
     }
     else { //LV_BLEND_MODE_MULTIPLY,   /**< Multiply the foreground and background*/
         /* TODO */
-        __NOP();
     }
 
     lv_point_t p[4] = { //Points in clockwise order
@@ -346,9 +344,7 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
 
 #if LV_USE_OS
     status = lv_mutex_unlock(u->pd2Mutex);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
 }

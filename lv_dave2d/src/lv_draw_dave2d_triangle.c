@@ -1,4 +1,5 @@
 #include "lv_draw_dave2d.h"
+#include "src/misc/lv_area_private.h"
 
 void lv_draw_dave2d_triangle(lv_draw_dave2d_unit_t * u, const lv_draw_triangle_dsc_t * dsc)
 {
@@ -14,18 +15,16 @@ void lv_draw_dave2d_triangle(lv_draw_dave2d_unit_t * u, const lv_draw_triangle_d
     tri_area.x2 = LV_MAX3(dsc->p[0].x, dsc->p[1].x, dsc->p[2].x);
     tri_area.y2 = LV_MAX3(dsc->p[0].y, dsc->p[1].y, dsc->p[2].y);
 
-    if(!_lv_area_intersect(&clipped_area, &tri_area, u->base_unit.clip_area)) return;
+    if(!lv_area_intersect(&clipped_area, &tri_area, &u->task_act->clip_area)) return;
 
 #if LV_USE_OS
     lv_result_t  status;
     status = lv_mutex_lock(u->pd2Mutex);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
-    x = 0 - u->base_unit.target_layer->buf_area.x1;
-    y = 0 - u->base_unit.target_layer->buf_area.y1;
+    x = 0 - u->task_act->target_layer->buf_area.x1;
+    y = 0 - u->task_act->target_layer->buf_area.y1;
 
     lv_area_move(&clipped_area, x, y);
 
@@ -79,20 +78,20 @@ void lv_draw_dave2d_triangle(lv_draw_dave2d_unit_t * u, const lv_draw_triangle_d
         }
     }
 
-    p[0].x -= u->base_unit.target_layer->buf_area.x1;
-    p[1].x -= u->base_unit.target_layer->buf_area.x1;
-    p[2].x -= u->base_unit.target_layer->buf_area.x1;
+    p[0].x -= u->task_act->target_layer->buf_area.x1;
+    p[1].x -= u->task_act->target_layer->buf_area.x1;
+    p[2].x -= u->task_act->target_layer->buf_area.x1;
 
-    p[0].y -= u->base_unit.target_layer->buf_area.y1;
-    p[1].y -= u->base_unit.target_layer->buf_area.y1;
-    p[2].y -= u->base_unit.target_layer->buf_area.y1;
+    p[0].y -= u->task_act->target_layer->buf_area.y1;
+    p[1].y -= u->task_act->target_layer->buf_area.y1;
+    p[2].y -= u->task_act->target_layer->buf_area.y1;
 
     p[1].y -= 1;
     p[2].y -= 1;
 
     current_alpha_mode = d2_getalphamode(u->d2_handle);
 
-    if(LV_GRAD_DIR_NONE != dsc->bg_grad.dir) {
+    if(LV_GRAD_DIR_NONE != dsc->grad.dir) {
         float a1;
         float a2;
 
@@ -104,16 +103,16 @@ void lv_draw_dave2d_triangle(lv_draw_dave2d_unit_t * u, const lv_draw_triangle_d
         int32_t y0_i ;
         int32_t y3_i ;
 
-        if(LV_GRAD_DIR_VER == dsc->bg_grad.dir) {
-            a1 = dsc->bg_grad.stops[0].opa;
-            a2 = dsc->bg_grad.stops[dsc->bg_grad.stops_count - 1].opa;
+        if(LV_GRAD_DIR_VER == dsc->grad.dir) {
+            a1 = dsc->grad.stops[0].opa;
+            a2 = dsc->grad.stops[dsc->grad.stops_count - 1].opa;
 
             y1 = LV_MIN3(p[0].y, p[1].y, p[2].y);
             y2 = LV_MAX3(p[0].y, p[1].y, p[2].y);
 
             if(a1 < a2) {
                 /* TODO */
-                __BKPT(0);
+                LV_ASSERT(0);
                 y0 = 0.0f;//silence the compiler warning
                 y3 = 0.0f;
 
@@ -128,22 +127,22 @@ void lv_draw_dave2d_triangle(lv_draw_dave2d_unit_t * u, const lv_draw_triangle_d
 
             d2_setalphagradient(u->d2_handle, 0, D2_FIX4(0),  D2_FIX4(y0_i), D2_FIX4(0), D2_FIX4((y3_i - y0_i)));
         }
-        else if(LV_GRAD_DIR_HOR == dsc->bg_grad.dir) {
+        else if(LV_GRAD_DIR_HOR == dsc->grad.dir) {
             /* TODO */
-            __BKPT(0);
+            LV_ASSERT(0);
         }
 
-        d2_setcolor(u->d2_handle, 0, lv_draw_dave2d_lv_colour_to_d2_colour(dsc->bg_grad.stops[0].color));
+        d2_setcolor(u->d2_handle, 0, lv_draw_dave2d_lv_colour_to_d2_colour(dsc->grad.stops[0].color));
         d2_setalphamode(u->d2_handle, d2_am_gradient1);
     }
     else {
-        d2_setalpha(u->d2_handle, dsc->bg_opa);
+        d2_setalpha(u->d2_handle, dsc->opa);
         d2_setalphamode(u->d2_handle, d2_am_constant);
-        d2_setcolor(u->d2_handle, 0, lv_draw_dave2d_lv_colour_to_d2_colour(dsc->bg_color));
+        d2_setcolor(u->d2_handle, 0, lv_draw_dave2d_lv_colour_to_d2_colour(dsc->color));
 
     }
 
-    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, u->task_act->target_layer);
 
     d2_cliprect(u->d2_handle, (d2_border)clipped_area.x1, (d2_border)clipped_area.y1, (d2_border)clipped_area.x2,
                 (d2_border)clipped_area.y2);
@@ -173,10 +172,7 @@ void lv_draw_dave2d_triangle(lv_draw_dave2d_unit_t * u, const lv_draw_triangle_d
 
 #if LV_USE_OS
     status = lv_mutex_unlock(u->pd2Mutex);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
-
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
 }
