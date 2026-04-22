@@ -55,7 +55,7 @@ static void dave2d_draw_border_simple(lv_draw_dave2d_unit_t * u, const lv_area_t
     int32_t y;
     bool is_common;
 
-    is_common = lv_area_intersect(&clip_area, outer_area, &u->task_act->clip_area);
+    is_common = lv_area_intersect(&clip_area, outer_area, u->base_unit.clip_area);
     if(!is_common) return;
 
 #if LV_USE_OS
@@ -67,8 +67,8 @@ static void dave2d_draw_border_simple(lv_draw_dave2d_unit_t * u, const lv_area_t
     local_outer_area = *outer_area;
     local_inner_area = *inner_area;
 
-    x = 0 - u->task_act->target_layer->buf_area.x1;
-    y = 0 - u->task_act->target_layer->buf_area.y1;
+    x = 0 - u->base_unit.target_layer->buf_area.x1;
+    y = 0 - u->base_unit.target_layer->buf_area.y1;
 
     lv_area_move(&clip_area, x, y);
     lv_area_move(&local_outer_area, x, y);
@@ -83,7 +83,7 @@ static void dave2d_draw_border_simple(lv_draw_dave2d_unit_t * u, const lv_area_t
     // Generate render operations
     //
 
-    d2_framebuffer_from_layer(u->d2_handle, u->task_act->target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
 
     d2_setcolor(u->d2_handle, 0, lv_draw_dave2d_lv_colour_to_d2_colour(color));
     d2_setalpha(u->d2_handle, opa);
@@ -176,7 +176,7 @@ static void dave2d_draw_border_complex(lv_draw_dave2d_unit_t * u, const lv_area_
     outer_area = *orig_outer_area;
     inner_area = *orig_inner_area;
 
-    if(!lv_area_intersect(&draw_area, &outer_area, &u->task_act->clip_area)) return;
+    if(!lv_area_intersect(&draw_area, &outer_area, u->base_unit.clip_area)) return;
 
 #if LV_USE_OS
     lv_result_t  status;
@@ -184,8 +184,8 @@ static void dave2d_draw_border_complex(lv_draw_dave2d_unit_t * u, const lv_area_
     LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
-    x = 0 - u->task_act->target_layer->buf_area.x1;
-    y = 0 - u->task_act->target_layer->buf_area.y1;
+    x = 0 - u->base_unit.target_layer->buf_area.x1;
+    y = 0 - u->base_unit.target_layer->buf_area.y1;
 
     lv_area_move(&draw_area, x, y);
     lv_area_move(&outer_area, x, y);
@@ -200,7 +200,7 @@ static void dave2d_draw_border_complex(lv_draw_dave2d_unit_t * u, const lv_area_
     // Generate render operations
     //
 
-    d2_framebuffer_from_layer(u->d2_handle, u->task_act->target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
 
     d2_setcolor(u->d2_handle, 0, lv_draw_dave2d_lv_colour_to_d2_colour(color));
     d2_setalpha(u->d2_handle, opa);
