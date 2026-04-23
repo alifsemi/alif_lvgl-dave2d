@@ -22,7 +22,7 @@ void lv_draw_dave2d_line(lv_draw_dave2d_unit_t * u, const lv_draw_line_dsc_t * d
     clip_line.y2 = LV_MAX(dsc->p1.y, dsc->p2.y) + dsc->width / 2;
 
     bool is_common;
-    is_common = lv_area_intersect(&clip_line, &clip_line, &u->task_act->clip_area);
+    is_common = lv_area_intersect(&clip_line, &clip_line, u->base_unit.clip_area);
     if(!is_common) return;
 
 #if LV_USE_OS
@@ -31,14 +31,14 @@ void lv_draw_dave2d_line(lv_draw_dave2d_unit_t * u, const lv_draw_line_dsc_t * d
     LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
-    buffer_area = u->task_act->target_layer->buf_area;
+    buffer_area = u->base_unit.target_layer->buf_area;
     p1_x = dsc->p1.x - buffer_area.x1;
     p1_y = dsc->p1.y - buffer_area.y1;
     p2_x = dsc->p2.x - buffer_area.x1;
     p2_y = dsc->p2.y - buffer_area.y1;
 
-    x = 0 - u->task_act->target_layer->buf_area.x1;
-    y = 0 - u->task_act->target_layer->buf_area.y1;
+    x = 0 - u->base_unit.target_layer->buf_area.x1;
+    y = 0 - u->base_unit.target_layer->buf_area.y1;
 
     lv_area_move(&clip_line, x, y);
     lv_area_move(&buffer_area, x, y);
@@ -58,7 +58,7 @@ void lv_draw_dave2d_line(lv_draw_dave2d_unit_t * u, const lv_draw_line_dsc_t * d
     //
     // Generate render operations
     //
-    d2_framebuffer_from_layer(u->d2_handle, u->task_act->target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
 
     d2_setcolor(u->d2_handle, 0, lv_draw_dave2d_lv_colour_to_d2_colour(dsc->color));
 

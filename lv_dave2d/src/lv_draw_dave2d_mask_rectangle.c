@@ -8,10 +8,10 @@ void lv_draw_dave2d_mask_rect(lv_draw_dave2d_unit_t * u, const lv_draw_mask_rect
     int32_t x;
     int32_t y;
 
-    if(!lv_area_intersect(&clipped_area, coords, &u->task_act->clip_area)) return;
+    if(!lv_area_intersect(&clipped_area, coords, u->base_unit.clip_area)) return;
 
-    x = 0 - u->task_act->target_layer->buf_area.x1;
-    y = 0 - u->task_act->target_layer->buf_area.y1;
+    x = 0 - u->base_unit.target_layer->buf_area.x1;
+    y = 0 - u->base_unit.target_layer->buf_area.y1;
 
     coordinates = *coords;
 
@@ -30,7 +30,7 @@ void lv_draw_dave2d_mask_rect(lv_draw_dave2d_unit_t * u, const lv_draw_mask_rect
 #endif
 #endif
 
-    d2_framebuffer_from_layer(u->d2_handle, u->task_act->target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
 
     d2_cliprect(u->d2_handle, (d2_border)clipped_area.x1, (d2_border)clipped_area.y1, (d2_border)clipped_area.x2,
                 (d2_border)clipped_area.y2);

@@ -62,7 +62,7 @@ DEFAULT_ARGS="-v"
 # Default: empty
 #
 PACKCHK_DEPS="
-  https://github.com/lvgl/lvgl/raw/v9.5.0/env_support/cmsis-pack/LVGL.lvgl.pdsc
+  https://github.com/lvgl/lvgl/raw/v9.2.2/env_support/cmsis-pack/LVGL.lvgl.pdsc
   https://github.com/alifsemi/alif_dave2d-driver/releases/download/v2.0.2/AlifSemiconductor.Dave2DDriver.pdsc
 "
 

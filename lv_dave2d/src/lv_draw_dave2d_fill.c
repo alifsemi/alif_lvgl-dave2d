@@ -14,7 +14,7 @@ void lv_draw_dave2d_fill(lv_draw_dave2d_unit_t * u, const lv_draw_fill_dsc_t * d
 
     lv_point_t arc_centre;
 
-    is_common = lv_area_intersect(&draw_area, coords, &u->task_act->clip_area);
+    is_common = lv_area_intersect(&draw_area, coords, u->base_unit.clip_area);
     if(!is_common) return;
 
 #if LV_USE_OS
@@ -25,8 +25,8 @@ void lv_draw_dave2d_fill(lv_draw_dave2d_unit_t * u, const lv_draw_fill_dsc_t * d
 
     lv_area_copy(&coordinates, coords);
 
-    x = 0 - u->task_act->target_layer->buf_area.x1;
-    y = 0 - u->task_act->target_layer->buf_area.y1;
+    x = 0 - u->base_unit.target_layer->buf_area.x1;
+    y = 0 - u->base_unit.target_layer->buf_area.y1;
 
     lv_area_move(&draw_area, x, y);
     lv_area_move(&coordinates, x, y);
@@ -40,7 +40,7 @@ void lv_draw_dave2d_fill(lv_draw_dave2d_unit_t * u, const lv_draw_fill_dsc_t * d
 #endif
 #endif
 
-    d2_framebuffer_from_layer(u->d2_handle, u->task_act->target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
 
     if(LV_GRAD_DIR_NONE != dsc->grad.dir) {
         float a1;

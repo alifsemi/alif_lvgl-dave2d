@@ -1,9 +1,8 @@
 #include "lv_draw_dave2d.h"
 #include "src/draw/lv_draw_label_private.h"
 #include "src/misc/lv_area_private.h"
-#include <string.h>
 
-static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_t * glyph_draw_dsc,
+static void lv_draw_dave2d_draw_letter_cb(lv_draw_unit_t * draw_unit, lv_draw_glyph_dsc_t * glyph_draw_dsc,
                                           lv_draw_fill_dsc_t * fill_draw_dsc, const lv_area_t * fill_area);
 
 static void lv_label_render(d2_device * handle, const lv_color_t * color, lv_opa_t opa,
@@ -21,16 +20,16 @@ void lv_draw_dave2d_label(lv_draw_dave2d_unit_t * u, const lv_draw_label_dsc_t *
 
 #if (D2_LABEL_RENDER_EACH_LETTER == 0)
     lv_area_t clipped_area;
-    bool clips = lv_area_intersect(&clipped_area, coords, &u->task_act->clip_area);
+    bool clips = lv_area_intersect(&clipped_area, coords, u->base_unit.clip_area);
     if (!clips) return;
 
-    int32_t x = 0 - u->task_act->target_layer->buf_area.x1;
-    int32_t y = 0 - u->task_act->target_layer->buf_area.y1;
+    int32_t x = 0 - u->base_unit.target_layer->buf_area.x1;
+    int32_t y = 0 - u->base_unit.target_layer->buf_area.y1;
 
     lv_area_move(&clipped_area, x, y);
     lv_area_move(&label_coords, x, y);
 
-    lv_area_t saved_clip_area = u->task_act->clip_area;
+    const lv_area_t * current_layer_clip_area = u->base_unit.clip_area;
 
     lv_area_t act_area;
     act_area.x1 = clipped_area.x1;
@@ -38,7 +37,7 @@ void lv_draw_dave2d_label(lv_draw_dave2d_unit_t * u, const lv_draw_label_dsc_t *
     act_area.y1 = clipped_area.y1;
     act_area.y2 = clipped_area.y1;
 
-    u->task_act->clip_area = act_area;
+    u->base_unit.clip_area = &act_area;
 
     int32_t w = lv_area_get_width(&clipped_area);
     uint32_t max_height = D2_LABEL_BUF_SIZE / w / lv_color_format_get_size(LV_COLOR_FORMAT_A8);
@@ -63,7 +62,7 @@ void lv_draw_dave2d_label(lv_draw_dave2d_unit_t * u, const lv_draw_label_dsc_t *
     u->label_coords = lv_malloc(sizeof(lv_area_t));
     lv_area_copy(u->label_coords, &act_area);
 
-    d2_framebuffer_from_layer(unit->d2_handle, unit->task_act->target_layer);
+    d2_framebuffer_from_layer(unit->d2_handle, unit->base_unit.target_layer);
 
     d2_u8 current_fillmode = d2_getfillmode(unit->d2_handle);
 
@@ -71,7 +70,7 @@ void lv_draw_dave2d_label(lv_draw_dave2d_unit_t * u, const lv_draw_label_dsc_t *
                 (d2_border)act_area.y2);
 #endif
 
-    lv_draw_label_iterate_characters(u->task_act, dsc, &label_coords, lv_draw_dave2d_draw_letter_cb);
+    lv_draw_label_iterate_characters(&u->base_unit, dsc, &label_coords, lv_draw_dave2d_draw_letter_cb);
 
 #if (D2_LABEL_RENDER_EACH_LETTER == 0)
     lv_label_render(unit->d2_handle, &dsc->color, dsc->opa, &act_area, u->label_drawbuffer);
@@ -103,11 +102,11 @@ void lv_draw_dave2d_label(lv_draw_dave2d_unit_t * u, const lv_draw_label_dsc_t *
         act_area.y1 = act_area.y2 + 1;
     }
 
-    u->task_act->clip_area = saved_clip_area;
+    u->base_unit.clip_area = current_layer_clip_area;
 #endif
 }
 
-static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_t * glyph_draw_dsc,
+static void lv_draw_dave2d_draw_letter_cb(lv_draw_unit_t * u, lv_draw_glyph_dsc_t * glyph_draw_dsc,
                                           lv_draw_fill_dsc_t * fill_draw_dsc, const lv_area_t * fill_area)
 {
     d2_u8 current_fillmode;
@@ -128,8 +127,8 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
     if(!is_common) return;
 
 #if D2_LABEL_RENDER_EACH_LETTER
-    x = 0 - unit->task_act->target_layer->buf_area.x1;
-    y = 0 - unit->task_act->target_layer->buf_area.y1;
+    x = 0 - unit->base_unit.target_layer->buf_area.x1;
+    y = 0 - unit->base_unit.target_layer->buf_area.y1;
 #else
     x = 0 - unit->label_coords->x1;
     y = 0 - unit->label_coords->y1;
@@ -155,7 +154,7 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
     // Generate render operations
     //
 
-    d2_framebuffer_from_layer(unit->d2_handle, unit->task_act->target_layer);
+    d2_framebuffer_from_layer(unit->d2_handle, unit->base_unit.target_layer);
 
     current_fillmode = d2_getfillmode(unit->d2_handle);
 
@@ -181,7 +180,7 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
             case LV_FONT_GLYPH_FORMAT_A1 ... LV_FONT_GLYPH_FORMAT_A8:
 #if D2_LABEL_RENDER_EACH_LETTER
                 {
-                    lv_draw_buf_t * draw_buf = (lv_draw_buf_t *)glyph_draw_dsc->glyph_data;
+                    lv_draw_buf_t * draw_buf = glyph_draw_dsc->glyph_data;
 
                     lv_label_render(unit->d2_handle, &glyph_draw_dsc->color, glyph_draw_dsc->opa, &letter_coords, draw_buf);
 
@@ -189,7 +188,7 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
                 }
 #else
                 {
-                    const lv_draw_buf_t * draw_buf = glyph_draw_dsc->glyph_data;
+                    lv_draw_buf_t * draw_buf = glyph_draw_dsc->glyph_data;
 
                     lv_area_t letter_area;
                     letter_area.x1 = clip_area.x1 - letter_coords.x1;

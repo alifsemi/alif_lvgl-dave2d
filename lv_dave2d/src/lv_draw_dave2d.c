@@ -111,7 +111,7 @@ void lv_draw_dave2d_init(void)
     lv_ll_init(&_ll_Dave2D_Tasks, 4);
 
 #if LV_USE_OS
-    lv_thread_init(&draw_dave2d_unit->thread, "dave2d", LV_THREAD_PRIO_HIGH, _dave2d_render_thread_cb, 8 * 1024, draw_dave2d_unit);
+    lv_thread_init(&draw_dave2d_unit->thread, LV_THREAD_PRIO_HIGH, _dave2d_render_thread_cb, 8 * 1024, draw_dave2d_unit);
 #endif
 
 }
@@ -379,7 +379,7 @@ static int32_t lv_draw_dave2d_dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * 
     t = lv_draw_get_next_available_task(layer, NULL, DRAW_UNIT_ID_DAVE2D);
 
     while(t && t->preferred_draw_unit_id != DRAW_UNIT_ID_DAVE2D) {
-        t->state = LV_DRAW_TASK_STATE_FINISHED;
+        t->state = LV_DRAW_TASK_STATE_READY;
         t = lv_draw_get_next_available_task(layer, NULL, DRAW_UNIT_ID_DAVE2D);
     }
 
@@ -412,8 +412,8 @@ static int32_t lv_draw_dave2d_dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * 
 #endif
 
     t->state = LV_DRAW_TASK_STATE_IN_PROGRESS;
-    
-    t->draw_unit = draw_unit;
+    draw_dave2d_unit->base_unit.target_layer = layer;
+    draw_dave2d_unit->base_unit.clip_area = &t->clip_area;
     draw_dave2d_unit->task_act = t;
 
 #if LV_USE_OS
@@ -422,7 +422,7 @@ static int32_t lv_draw_dave2d_dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * 
 #else
     execute_drawing(draw_dave2d_unit);
 #if  (D2_RENDER_EACH_OPERATION)
-    draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_FINISHED;
+    draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_READY;
 #endif
     draw_dave2d_unit->task_act = NULL;
 
@@ -449,7 +449,7 @@ static void _dave2d_render_thread_cb(void * ptr)
 
         /*Cleanup*/
 #if  (D2_RENDER_EACH_OPERATION)
-        u->task_act->state = LV_DRAW_TASK_STATE_FINISHED;
+        u->task_act->state = LV_DRAW_TASK_STATE_READY;
 #endif
         u->task_act = NULL;
 
@@ -463,16 +463,16 @@ static void execute_drawing(lv_draw_dave2d_unit_t * u)
 {
     /*Render the draw task*/
     lv_draw_task_t * t = u->task_act;
-    lv_layer_t * layer = u->task_act->target_layer;
+    lv_layer_t * layer = u->base_unit.target_layer;
 
     lv_area_t clipped_area;
     int32_t x;
     int32_t y;
 
-    lv_area_intersect(&clipped_area, &t->area, &t->clip_area);
+    lv_area_intersect(&clipped_area,  &t->area, u->base_unit.clip_area);
 
-    x = 0 - u->task_act->target_layer->buf_area.x1;
-    y = 0 - u->task_act->target_layer->buf_area.y1;
+    x = 0 - u->base_unit.target_layer->buf_area.x1;
+    y = 0 - u->base_unit.target_layer->buf_area.y1;
 
     lv_area_move(&clipped_area, x, y);
 
@@ -498,7 +498,7 @@ static void execute_drawing(lv_draw_dave2d_unit_t * u)
             lv_draw_dave2d_label(u, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_IMAGE:
-            lv_draw_dave2d_image(t, t->draw_dsc, &t->area);
+            lv_draw_dave2d_image(u, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_LINE:
             lv_draw_dave2d_line(u, t->draw_dsc);
@@ -621,7 +621,7 @@ void dave2d_execute_dlist_and_flush(void)
     while(false == lv_ll_is_empty(&_ll_Dave2D_Tasks)) {
         p_list_entry = lv_ll_get_tail(&_ll_Dave2D_Tasks);
         p_list_entry1 = *p_list_entry;
-        p_list_entry1->state = LV_DRAW_TASK_STATE_FINISHED;
+        p_list_entry1->state = LV_DRAW_TASK_STATE_READY;
         lv_ll_remove(&_ll_Dave2D_Tasks, p_list_entry);
         lv_free(p_list_entry);
     }
