@@ -127,6 +127,19 @@ static void lv_draw_buf_dave2d_init_handlers(void)
     handlers->invalidate_cache_cb = _dave2d_buf_invalidate_cache_cb;
     handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
     handlers->buf_free_cb = _dave2d_buf_free_cb;
+
+    /* Image cache buffers may be used as DAVE2D blit sources, so they
+     * must also be allocated from GPU-accessible memory. */
+    lv_draw_buf_handlers_t * img_handlers = lv_draw_buf_get_image_handlers();
+    img_handlers->invalidate_cache_cb = _dave2d_buf_invalidate_cache_cb;
+    img_handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
+    img_handlers->buf_free_cb = _dave2d_buf_free_cb;
+
+    /* Font glyph buffers may be used as DAVE2D texture sources. */
+    lv_draw_buf_handlers_t * font_handlers = lv_draw_buf_get_font_handlers();
+    font_handlers->invalidate_cache_cb = _dave2d_buf_invalidate_cache_cb;
+    font_handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
+    font_handlers->buf_free_cb = _dave2d_buf_free_cb;
 }
 
 static void _dave2d_buf_invalidate_cache_cb(const lv_draw_buf_t * draw_buf, const lv_area_t * area)
