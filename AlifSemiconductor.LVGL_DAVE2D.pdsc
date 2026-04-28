@@ -12,6 +12,9 @@
   -->
 
   <releases>
+    <release version="1.2.0" tag="v1.2.0" url="https://github.com/alifsemi/alif_lvgl-dave2d/releases/download/v1.2.0/AlifSemiconductor.LVGL_DAVE2D.1.2.0.pack" date="2026-04-30">
+      Support for LVGL 9.5 and DAVE 2D Driver 2.0.3
+    </release>
     <release version="1.1.2" tag="v1.1.2" url="https://github.com/alifsemi/alif_lvgl-dave2d/releases/download/v1.1.2/AlifSemiconductor.LVGL_DAVE2D.1.1.2.pack" date="2026-04-22">
       Revert LVGL 9.5 support due to some issues, will be re-added in a future release. Support for LVGL 9.2.2.
     </release>
@@ -34,8 +37,8 @@
 
   <requirements>
     <packages>
-      <package name="Dave2DDriver"  vendor="AlifSemiconductor" version="2.0.2"/>
-      <package name="lvgl"          vendor="LVGL"              version="9.2.2"/>
+      <package name="Dave2DDriver"  vendor="AlifSemiconductor" version="2.0.3"/>
+      <package name="lvgl"          vendor="LVGL"              version="9.5.0"/>
     </packages>
   </requirements>
 
@@ -64,13 +67,13 @@
   </conditions>
 
   <components>
-    <component Cclass="Graphics" Cgroup="Acceleration" Csub="GPU AlifSemi-Dave2D" Cversion="1.0.0" condition="LVGL-GPU AlifSemi-Dave2D">
+    <component Cclass="Graphics" Cgroup="Acceleration" Csub="GPU AlifSemi-Dave2D" Cversion="1.2.0" condition="LVGL-GPU AlifSemi-Dave2D">
       <description>An hardware acceleration from Alif Semiconductor Dave2D</description>
       <files>
         <!-- include folder / device header file -->
         <file category="include"  name="lv_dave2d/inc/"/>
         <!-- include headers -->
-        <file category="header"   name="lv_dave2d/inc/hal_data.h"/>
+        <file category="header"   name="lv_dave2d/inc/bsp_api.h"/>
         <file category="header"   name="lv_dave2d/inc/lv_draw_dave2d.h"/>
         <file category="header"   name="lv_dave2d/inc/lv_draw_dave2d_utils.h"/>
         <!-- source files -->
@@ -85,7 +88,7 @@
         <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_triangle.c"/>
         <file category="sourceC"  name="lv_dave2d/src/lv_draw_dave2d_utils.c"/>
         <!-- config header -->
-        <file category="header"   name="lv_dave2d/lv_dave2d_cfg.h" attr="config" version="1.0.0"/>
+        <file category="header"   name="lv_dave2d/lv_dave2d_cfg.h" attr="config" version="1.2.0"/>
       </files>
 
       <RTE_Components_h>
