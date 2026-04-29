@@ -135,11 +135,20 @@ static void lv_draw_buf_dave2d_init_handlers(void)
     img_handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
     img_handlers->buf_free_cb = _dave2d_buf_free_cb;
 
-    /* Font glyph buffers may be used as DAVE2D texture sources. */
+    /* Font glyph buffers may be used as DAVE2D texture sources
+     * when rendering each letter individually. When using the
+     * batch label path (D2_LABEL_RENDER_EACH_LETTER == 0),
+     * glyph data is only copied by the CPU, so regular memory
+     * is sufficient and avoids pressure on the d2 vidmem pool.
+     * Keeping them in the default (LVGL) heap also avoids
+     * pointer collisions with deferred d2_buf entries that
+     * could cause _dave2d_buf_free_cb to skip a free. */
+#if D2_LABEL_RENDER_EACH_LETTER
     lv_draw_buf_handlers_t * font_handlers = lv_draw_buf_get_font_handlers();
     font_handlers->invalidate_cache_cb = _dave2d_buf_invalidate_cache_cb;
     font_handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
     font_handlers->buf_free_cb = _dave2d_buf_free_cb;
+#endif
 }
 
 static void _dave2d_buf_invalidate_cache_cb(const lv_draw_buf_t * draw_buf, const lv_area_t * area)
