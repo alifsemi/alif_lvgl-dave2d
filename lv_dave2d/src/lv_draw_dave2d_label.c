@@ -56,9 +56,6 @@ void lv_draw_dave2d_label(lv_draw_dave2d_unit_t * u, const lv_draw_label_dsc_t *
     u->label_drawbuffer = lv_draw_buf_create(lv_area_get_width(&act_area), lv_area_get_height(&act_area),
                                              LV_COLOR_FORMAT_A8, LV_STRIDE_AUTO);
     memset(u->label_drawbuffer->data, 0, u->label_drawbuffer->data_size);
-#if D2_USE_INTERNAL_RENDERBUFFERS
-    d2_buf_add(u->label_drawbuffer->data);
-#endif
 
     u->label_coords = lv_malloc(sizeof(lv_area_t));
     lv_area_copy(u->label_coords, &act_area);
@@ -80,6 +77,7 @@ void lv_draw_dave2d_label(lv_draw_dave2d_unit_t * u, const lv_draw_label_dsc_t *
 
 #if D2_RENDER_EACH_OPERATION
 #if D2_USE_INTERNAL_RENDERBUFFERS
+    d2_buf_add(u->label_drawbuffer->data);
     d2_start_rendering();
 #else
     d2_executerenderbuffer(unit->d2_handle, unit->renderbuffer, 0);
