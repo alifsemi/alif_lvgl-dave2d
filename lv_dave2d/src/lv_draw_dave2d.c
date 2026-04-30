@@ -21,8 +21,17 @@
 /*********************
  *      DEFINES
  *********************/
-#define DRAW_UNIT_ID_DAVE2D     4
+#define DRAW_UNIT_ID_DAVE2D         4
+/* The amount of tasks exercising pressure to the current to get finished
+ * This one is used as the main signal to start to render a block of tasks.
+ */
+#ifndef LV_DAVE2D_MAX_DRAW_PRESSURE
+    #define LV_DAVE2D_MAX_DRAW_PRESSURE    256
+#endif
 
+#if (LV_DAVE2D_MAX_DRAW_PRESSURE < 256)
+    #error "DRAW Pressure should be at least 256 otherwise the Dave engine may crash!"
+#endif
 /**********************
  *      TYPEDEFS
  **********************/
@@ -30,9 +39,6 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-#if LV_USE_OS
-    static void _dave2d_render_thread_cb(void * ptr);
-#endif
 
 static void * _dave2d_buf_malloc_cb(size_t size, lv_color_format_t color_format);
 
@@ -43,13 +49,12 @@ static void execute_drawing(lv_draw_dave2d_unit_t * u);
 static void _dave2d_buf_invalidate_cache_cb(const lv_draw_buf_t * draw_buf, const lv_area_t * area);
 
 static int32_t _dave2d_evaluate(lv_draw_unit_t * draw_unit, lv_draw_task_t * task);
-
+static int32_t _dave2d_wait_finish(lv_draw_unit_t * draw_unit);
 static int32_t lv_draw_dave2d_dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * layer);
 
 static d2_s32 lv_dave2d_init(void);
-
 static void lv_draw_buf_dave2d_init_handlers(void);
-
+static bool lv_draw_dave2d_image_color_format_supported(lv_color_format_t color_format);
 void dave2d_execute_dlist_and_flush(void);
 
 /**********************
@@ -60,13 +65,17 @@ void dave2d_execute_dlist_and_flush(void);
  *  STATIC VARIABLES
  **********************/
 
-d2_device * _d2_handle;
+static d2_device * _d2_handle;
 #if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
-d2_renderbuffer * _renderbuffer;
-d2_renderbuffer * _blit_renderbuffer;
+/* Main render buffer, used to carry the block of dave commands for any shape */
+static d2_renderbuffer * _renderbuffer;
+
+/* Label dedicated render buffer, used to carry only label related dave commands */
+static d2_renderbuffer * _label_renderbuffer;
 #endif
 
-lv_ll_t  _ll_Dave2D_Tasks;
+static lv_ll_t  draw_tasks_on_dlist;
+static uint32_t draw_pressure = 0;
 
 #if LV_USE_OS
     lv_mutex_t xd2Semaphore;
@@ -89,6 +98,8 @@ void lv_draw_dave2d_init(void)
     lv_draw_dave2d_unit_t * draw_dave2d_unit = lv_draw_create_unit(sizeof(lv_draw_dave2d_unit_t));
     draw_dave2d_unit->base_unit.dispatch_cb = lv_draw_dave2d_dispatch;
     draw_dave2d_unit->base_unit.evaluate_cb = _dave2d_evaluate;
+    draw_dave2d_unit->base_unit.wait_for_finish_cb = _dave2d_wait_finish;
+    draw_dave2d_unit->base_unit.name = "DAVE2D";
     draw_dave2d_unit->idx = DRAW_UNIT_ID_DAVE2D;
 
     result = lv_dave2d_init();
@@ -107,13 +118,9 @@ void lv_draw_dave2d_init(void)
     d2_utils_init(_d2_handle);
 #else
     draw_dave2d_unit->renderbuffer = _renderbuffer;
+    draw_dave2d_unit->label_renderbuffer = _label_renderbuffer;
 #endif
-    lv_ll_init(&_ll_Dave2D_Tasks, 4);
-
-#if LV_USE_OS
-    lv_thread_init(&draw_dave2d_unit->thread, LV_THREAD_PRIO_HIGH, _dave2d_render_thread_cb, 8 * 1024, draw_dave2d_unit);
-#endif
-
+    lv_ll_init(&draw_tasks_on_dlist, sizeof(uintptr_t));
 }
 
 /**********************
@@ -123,10 +130,21 @@ void lv_draw_dave2d_init(void)
 static void lv_draw_buf_dave2d_init_handlers(void)
 {
     lv_draw_buf_handlers_t * handlers = lv_draw_buf_get_handlers();
-
     handlers->invalidate_cache_cb = _dave2d_buf_invalidate_cache_cb;
     handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
     handlers->buf_free_cb = _dave2d_buf_free_cb;
+
+    /* Image cache also needs GPU-accessible memory */
+    lv_draw_buf_handlers_t * img_handlers = lv_draw_buf_get_image_handlers();
+    img_handlers->invalidate_cache_cb = _dave2d_buf_invalidate_cache_cb;
+    img_handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
+    img_handlers->buf_free_cb = _dave2d_buf_free_cb;
+
+      /* Font glyph buffers may be used as DAVE2D texture sources. */
+    lv_draw_buf_handlers_t * font_handlers = lv_draw_buf_get_font_handlers();
+    font_handlers->invalidate_cache_cb = _dave2d_buf_invalidate_cache_cb;
+    font_handlers->buf_malloc_cb = _dave2d_buf_malloc_cb;
+    font_handlers->buf_free_cb = _dave2d_buf_free_cb;
 }
 
 static void _dave2d_buf_invalidate_cache_cb(const lv_draw_buf_t * draw_buf, const lv_area_t * area)
@@ -165,80 +183,76 @@ static void _dave2d_buf_copy(void * dest_buf, uint32_t dest_w, uint32_t dest_h, 
     lv_result_t  status;
 
     status = lv_mutex_lock(&xd2Semaphore);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
     d2_u32 src_blend_mode = d2_getblendmodesrc(_d2_handle);
     d2_u32 dst_blend_mode = d2_getblendmodedst(_d2_handle);
 
     result = d2_selectrenderbuffer(_d2_handle, _blit_renderbuffer);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     result = d2_setblendmode(_d2_handle, d2_bm_one, d2_bm_zero);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     // Generate render operations
     result = d2_framebuffer(_d2_handle, (uint16_t *)dest_buf, DISPLAY_HSIZE_INPUT0, DISPLAY_BUFFER_STRIDE_PIXELS_INPUT0,
                             DISPLAY_VSIZE_INPUT0, lv_draw_dave2d_cf_fb_get());
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     result = d2_cliprect(_d2_handle, (d2_border)dest_area->x1, (d2_border)dest_area->y1, (d2_border)dest_area->x2,
                          (d2_border)dest_area->y2);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     result = d2_setblitsrc(_d2_handle, (void *) src_buf, (d2_s32)src_w, (d2_s32)src_w, (d2_s32)src_h,
                            lv_draw_dave2d_lv_colour_fmt_to_d2_fmt(color_format));
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     result = d2_blitcopy(_d2_handle, (d2_s32)src_w, (d2_s32)src_h, (d2_blitpos)src_area->x1, (d2_blitpos)src_area->y1,
                          D2_FIX4(dest_w), D2_FIX4(dest_h),
                          D2_FIX4(dest_area->x1), D2_FIX4(dest_area->y1), 0);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     // Execute render operations
     result = d2_executerenderbuffer(_d2_handle, _blit_renderbuffer, 0);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result) ;
 
     result = d2_flushframe(_d2_handle);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     result = d2_selectrenderbuffer(_d2_handle, _renderbuffer);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     result = d2_setblendmode(_d2_handle, src_blend_mode, dst_blend_mode);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK != result);
 
 #if LV_USE_OS
     status = lv_mutex_unlock(&xd2Semaphore);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
 }
 #endif
+
+static bool lv_draw_dave2d_image_color_format_supported(lv_color_format_t color_format)
+{
+    bool supported = false;
+
+    switch(color_format) {
+        case LV_COLOR_FORMAT_A8:
+        case LV_COLOR_FORMAT_RGB565:
+        case LV_COLOR_FORMAT_ARGB1555:
+        case LV_COLOR_FORMAT_ARGB4444:
+        case LV_COLOR_FORMAT_ARGB8888:
+        case LV_COLOR_FORMAT_XRGB8888:
+            supported = true;
+            break;
+        default:
+            break;
+    }
+
+    return supported;
+}
 
 #define USE_D2 (1)
 
@@ -246,6 +260,11 @@ static int32_t _dave2d_evaluate(lv_draw_unit_t * u, lv_draw_task_t * t)
 {
     LV_UNUSED(u);
     int32_t ret = 0;
+
+    lv_draw_dsc_base_t * draw_dsc_base = (lv_draw_dsc_base_t *) t->draw_dsc;
+
+    if(!lv_draw_dave2d_is_dest_cf_supported(draw_dsc_base->layer->color_format))
+        return 0;
 
     switch(t->type) {
         case LV_DRAW_TASK_TYPE_FILL: {
@@ -274,6 +293,11 @@ static int32_t _dave2d_evaluate(lv_draw_unit_t * u, lv_draw_task_t * t)
             }
 
         case LV_DRAW_TASK_TYPE_IMAGE: {
+                lv_draw_image_dsc_t * dsc = t->draw_dsc;
+                if(!lv_draw_dave2d_image_color_format_supported(dsc->header.cf)) {
+                    ret = 0;
+                    break;
+                }
 #if USE_D2
                 t->preferred_draw_unit_id = DRAW_UNIT_ID_DAVE2D;
                 t->preference_score = 0;
@@ -363,116 +387,141 @@ static int32_t _dave2d_evaluate(lv_draw_unit_t * u, lv_draw_task_t * t)
     return ret;
 }
 
-#define DAVE2D_REFERRING_WATERMARK  10
 
 static int32_t lv_draw_dave2d_dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * layer)
 {
     lv_draw_dave2d_unit_t * draw_dave2d_unit = (lv_draw_dave2d_unit_t *) draw_unit;
-#if  (0 == D2_RENDER_EACH_OPERATION)
-    static uint32_t ref_count = 0;
-#endif
+    uint32_t deps = 0;
 
-    /*Return immediately if it's busy with draw task*/
-    if(draw_dave2d_unit->task_act) return 0;
+    if(draw_dave2d_unit->task_act) {
+        /* Return immediately if it's busy with draw task */
+        return LV_DRAW_UNIT_IDLE;
+    }
 
     lv_draw_task_t * t = NULL;
     t = lv_draw_get_next_available_task(layer, NULL, DRAW_UNIT_ID_DAVE2D);
-
-    while(t && t->preferred_draw_unit_id != DRAW_UNIT_ID_DAVE2D) {
-        t->state = LV_DRAW_TASK_STATE_READY;
-        t = lv_draw_get_next_available_task(layer, NULL, DRAW_UNIT_ID_DAVE2D);
-    }
-
     if(t == NULL) {
-#if  (0 == D2_RENDER_EACH_OPERATION)
-        if(false == lv_ll_is_empty(&_ll_Dave2D_Tasks)) {
-            ref_count = 0;
+        /* No valid task, but there are tasks waiting to be rendered,
+         * start to draw then immediately.
+         */
+        if(false == lv_ll_is_empty(&draw_tasks_on_dlist)) {
+            draw_pressure = 0;
             dave2d_execute_dlist_and_flush();
         }
-#endif
-        return LV_DRAW_UNIT_IDLE;  /*Couldn't start rendering*/
+        return LV_DRAW_UNIT_IDLE;  /* This task is not for us. */
     }
+
+    if((t->preferred_draw_unit_id != DRAW_UNIT_ID_DAVE2D)) return LV_DRAW_UNIT_IDLE;
+    if(!lv_draw_dave2d_is_dest_cf_supported(layer->color_format)) return LV_DRAW_UNIT_IDLE;
 
     void * buf = lv_draw_layer_alloc_buf(layer);
-    if(buf == NULL) {
-        return LV_DRAW_UNIT_IDLE;  /*Couldn't start rendering*/
-    }
+    if(buf == NULL) return LV_DRAW_UNIT_IDLE;
 
-#if  (0 == D2_RENDER_EACH_OPERATION)
-    ref_count += lv_draw_get_dependent_count(t);
+    deps = lv_draw_get_dependent_count(t);
+    if(deps > 0 || draw_pressure > 0) {
+        draw_pressure += deps;
+        if(draw_pressure < LV_DAVE2D_MAX_DRAW_PRESSURE) {
+            /* No other tasks are pressuring to get the current block
+             * of tasks including the latest one, just accumulate it
+             * and tells the drawing pipeline to send a new one if there is any
+             */
+            lv_draw_task_t ** p_new_list_entry;
+            p_new_list_entry = lv_ll_ins_tail(&draw_tasks_on_dlist);
+            *p_new_list_entry = t;
 
-    if(DAVE2D_REFERRING_WATERMARK < ref_count) {
-        ref_count = 0;
-        dave2d_execute_dlist_and_flush();
-    }
+            draw_dave2d_unit->task_act = t;
+            draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_IN_PROGRESS;
+            execute_drawing(draw_dave2d_unit);
 
-    lv_draw_task_t ** p_new_list_entry;
-    p_new_list_entry = lv_ll_ins_tail(&_ll_Dave2D_Tasks);
-    *p_new_list_entry = t;
-#endif
+            draw_dave2d_unit->task_act = NULL;
+            lv_draw_dispatch_request();
 
-    t->state = LV_DRAW_TASK_STATE_IN_PROGRESS;
-    draw_dave2d_unit->base_unit.target_layer = layer;
-    draw_dave2d_unit->base_unit.clip_area = &t->clip_area;
-    draw_dave2d_unit->task_act = t;
-
-#if LV_USE_OS
-    /*Let the render thread work*/
-    lv_thread_sync_signal(&draw_dave2d_unit->sync);
-#else
-    execute_drawing(draw_dave2d_unit);
-#if  (D2_RENDER_EACH_OPERATION)
-    draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_READY;
-#endif
-    draw_dave2d_unit->task_act = NULL;
-
-    /*The draw unit is free now. Request a new dispatching as it can get a new task*/
-    lv_draw_dispatch_request();
-
-#endif
-    return 1;
-}
-
-#if LV_USE_OS
-static void _dave2d_render_thread_cb(void * ptr)
-{
-    lv_draw_dave2d_unit_t * u = ptr;
-
-    lv_thread_sync_init(&u->sync);
-
-    while(1) {
-        while(u->task_act == NULL) {
-            lv_thread_sync_wait(&u->sync);
+            return 1;
         }
-
-        execute_drawing(u);
-
-        /*Cleanup*/
-#if  (D2_RENDER_EACH_OPERATION)
-        u->task_act->state = LV_DRAW_TASK_STATE_READY;
+        /* If the pressure for drawing value was maxed-out, it is time to render
+         * return IDLE to force the drawing pipeline to wait while the Dave
+         * draw the block of tasks in a single row
+         */
+        return LV_DRAW_UNIT_IDLE;
+    }
+    else {
+        /* Handles a special case when there is no sufficient draw pressure
+         * But the actual task did not carry any extra pressure to get drew
+         * in this case, the drawing pipeline have a few set of tasks that
+         * don't make sense to accumulate them, just do a run to completion
+         * here, that is it, render the incoming task immediately.
+         */
+        draw_dave2d_unit->task_act = t;
+        draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_IN_PROGRESS;
+#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
+        d2_selectrenderbuffer(_d2_handle, _renderbuffer);
 #endif
-        u->task_act = NULL;
-
-        /*The draw unit is free now. Request a new dispatching as it can get a new task*/
+        execute_drawing(draw_dave2d_unit);
+#if D2_USE_INTERNAL_RENDERBUFFERS
+        d2_start_rendering();
+#else
+        d2_executerenderbuffer(_d2_handle, _renderbuffer, 0);
+        d2_flushframe(_d2_handle);
+#endif
+        draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_FINISHED;
+        draw_dave2d_unit->task_act = NULL;
         lv_draw_dispatch_request();
+
+        return 1;
     }
 }
+
+static int32_t _dave2d_wait_finish(lv_draw_unit_t * draw_unit)
+{
+    /* If the drawing pipeline is waiting it means the pressure for drawing
+     * has been maxed out, defer the block of tasks to be rendered by the
+     * Dave and wait for its interrupt. (Dave2D driver is RTOS aware, no need for semaphores);
+     */
+    lv_draw_dave2d_unit_t * draw_dave2d_unit = (lv_draw_dave2d_unit_t *) draw_unit;
+
+    if(!draw_pressure) {
+        /* It reached here because Dave2D Draw Unit was not suitable to take a task
+         * While there is nothing being rendered, prevent the dead lock
+         * by flushing the GPU command buffer empty and just return.
+         */
+#if D2_USE_INTERNAL_RENDERBUFFERS
+        /* Wait for any in-flight GPU rendering started by a previous d2_start_rendering()
+         * call (e.g. from single-task dispatch path or label rendering). Without this,
+         * LVGL may read the layer buffer before the GPU has finished writing to it.
+         */
+        d2_finish_rendering();
 #endif
+        return 0;
+    }
+    dave2d_execute_dlist_and_flush();
+    draw_pressure = 0;
+#if D2_USE_INTERNAL_RENDERBUFFERS
+    /* dave2d_execute_dlist_and_flush() calls d2_start_rendering() which is non-blocking
+     * (d2_startframe). Wait here for GPU completion before LVGL accesses the output buffer.
+     */
+    d2_finish_rendering();
+#endif
+
+    return 0;
+}
 
 static void execute_drawing(lv_draw_dave2d_unit_t * u)
 {
     /*Render the draw task*/
     lv_draw_task_t * t = u->task_act;
-    lv_layer_t * layer = u->base_unit.target_layer;
+
+    /* remember draw unit for access to unit's context */
+    t->draw_unit = (lv_draw_unit_t *)u;
+    lv_layer_t * layer = t->target_layer;
 
     lv_area_t clipped_area;
     int32_t x;
     int32_t y;
 
-    lv_area_intersect(&clipped_area,  &t->area, u->base_unit.clip_area);
+    lv_area_intersect(&clipped_area,  &t->area, &t->clip_area);
 
-    x = 0 - u->base_unit.target_layer->buf_area.x1;
-    y = 0 - u->base_unit.target_layer->buf_area.y1;
+    x = 0 - t->target_layer->buf_area.x1;
+    y = 0 - t->target_layer->buf_area.y1;
 
     lv_area_move(&clipped_area, x, y);
 
@@ -481,44 +530,46 @@ static void execute_drawing(lv_draw_dave2d_unit_t * u)
 
     switch(t->type) {
         case LV_DRAW_TASK_TYPE_FILL:
-            lv_draw_dave2d_fill(u, t->draw_dsc, &t->area);
+            lv_draw_dave2d_fill(t, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_BORDER:
-            lv_draw_dave2d_border(u, t->draw_dsc, &t->area);
+            lv_draw_dave2d_border(t, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_BOX_SHADOW:
-            //lv_draw_dave2d_box_shadow(u, t->draw_dsc, &t->area);
+            //lv_draw_dave2d_box_shadow(t, t->draw_dsc, &t->area);
             break;
 #if 0
         case LV_DRAW_TASK_TYPE_BG_IMG:
-            //lv_draw_dave2d_bg_image(u, t->draw_dsc, &t->area);
+            //lv_draw_dave2d_bg_image(t, t->draw_dsc, &t->area);
             break;
 #endif
         case LV_DRAW_TASK_TYPE_LABEL:
-            lv_draw_dave2d_label(u, t->draw_dsc, &t->area);
+            lv_draw_dave2d_label(t, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_IMAGE:
-            lv_draw_dave2d_image(u, t->draw_dsc, &t->area);
+            lv_draw_dave2d_image(t, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_LINE:
-            lv_draw_dave2d_line(u, t->draw_dsc);
+            lv_draw_line_iterate(t, t->draw_dsc, lv_draw_dave2d_line);
             break;
         case LV_DRAW_TASK_TYPE_ARC:
-            lv_draw_dave2d_arc(u, t->draw_dsc, &t->area);
+            lv_draw_dave2d_arc(t, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_TRIANGLE:
-            lv_draw_dave2d_triangle(u, t->draw_dsc);
+            lv_draw_dave2d_triangle(t, t->draw_dsc);
             break;
         case LV_DRAW_TASK_TYPE_LAYER:
-            //lv_draw_dave2d_layer(u, t->draw_dsc, &t->area);
+            //lv_draw_dave2d_layer(t, t->draw_dsc, &t->area);
             break;
         case LV_DRAW_TASK_TYPE_MASK_RECTANGLE:
-            //lv_draw_dave2d_mask_rect(u, t->draw_dsc, &t->area);
+            //lv_draw_dave2d_mask_rect(t, t->draw_dsc, &t->area);
             break;
         default:
             break;
     }
 
+    // TODO: is this needed?
+    // lv_draw_buf_invalidate_cache(layer->draw_buf, &clipped_area);
 }
 
 static d2_s32 lv_dave2d_init(void)
@@ -539,7 +590,7 @@ static d2_s32 lv_dave2d_init(void)
     /* bind the hardware */
     result = d2_inithw(_d2_handle, flags);
     if(result != D2_OK) {
-        LV_LOG_ERROR("Could NOT d2_inithw\n");
+        LV_LOG_ERROR("Could NOT d2_inithw");
         d2_closedevice(_d2_handle);
         return result;
     }
@@ -555,25 +606,25 @@ static d2_s32 lv_dave2d_init(void)
     result = d2_setlinejoin(_d2_handle, d2_lj_miter);
 
     /* set blocksize for default displaylist */
-    result = d2_setdlistblocksize(_d2_handle, 25);
+    result = d2_setdlistblocksize(_d2_handle, 20);
     if(D2_OK != result) {
-        LV_LOG_ERROR("Could NOT d2_setdlistblocksize\n");
+        LV_LOG_ERROR("Could NOT d2_setdlistblocksize");
         d2_closedevice(_d2_handle);
         return result;
     }
 
 #if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
-    _blit_renderbuffer = d2_newrenderbuffer(_d2_handle, 20, 20);
-    if(!_blit_renderbuffer) {
-        LV_LOG_ERROR("NO renderbuffer\n");
+    _renderbuffer = d2_newrenderbuffer(_d2_handle, 250, 25);
+    if(!_renderbuffer) {
+        LV_LOG_ERROR("NO renderbuffer");
         d2_closedevice(_d2_handle);
 
         return D2_NOMEMORY;
     }
 
-    _renderbuffer = d2_newrenderbuffer(_d2_handle, 20, 20);
-    if(!_renderbuffer) {
-        LV_LOG_ERROR("NO renderbuffer\n");
+    _label_renderbuffer = d2_newrenderbuffer(_d2_handle, 250, 25);
+    if(!_label_renderbuffer) {
+        LV_LOG_ERROR("NO renderbuffer");
         d2_closedevice(_d2_handle);
 
         return D2_NOMEMORY;
@@ -581,7 +632,7 @@ static d2_s32 lv_dave2d_init(void)
 
     result = d2_selectrenderbuffer(_d2_handle, _renderbuffer);
     if(D2_OK != result) {
-        LV_LOG_ERROR("Could NOT d2_selectrenderbuffer\n");
+        LV_LOG_ERROR("Could NOT d2_selectrenderbuffer");
         d2_closedevice(_d2_handle);
     }
 #endif
@@ -591,16 +642,16 @@ static d2_s32 lv_dave2d_init(void)
 
 void dave2d_execute_dlist_and_flush(void)
 {
+    d2_s32 result;
+    lv_draw_task_t ** p_list_entry;
+    lv_draw_task_t * p_list_entry1;
+
 #if LV_USE_OS
     lv_result_t  status;
 
     status = lv_mutex_lock(&xd2Semaphore);
     LV_ASSERT(LV_RESULT_OK == status);
 #endif
-
-    d2_s32     result;
-    lv_draw_task_t ** p_list_entry;
-    lv_draw_task_t * p_list_entry1;
 
     // Execute render operations
 #if D2_USE_INTERNAL_RENDERBUFFERS
@@ -611,18 +662,16 @@ void dave2d_execute_dlist_and_flush(void)
 
     result = d2_flushframe(_d2_handle);
     LV_ASSERT(D2_OK == result);
-#endif
 
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
     result = d2_selectrenderbuffer(_d2_handle, _renderbuffer);
     LV_ASSERT(D2_OK == result);
 #endif
 
-    while(false == lv_ll_is_empty(&_ll_Dave2D_Tasks)) {
-        p_list_entry = lv_ll_get_tail(&_ll_Dave2D_Tasks);
+    while(false == lv_ll_is_empty(&draw_tasks_on_dlist)) {
+        p_list_entry = lv_ll_get_tail(&draw_tasks_on_dlist);
         p_list_entry1 = *p_list_entry;
-        p_list_entry1->state = LV_DRAW_TASK_STATE_READY;
-        lv_ll_remove(&_ll_Dave2D_Tasks, p_list_entry);
+        p_list_entry1->state = LV_DRAW_TASK_STATE_FINISHED;
+        lv_ll_remove(&draw_tasks_on_dlist, p_list_entry);
         lv_free(p_list_entry);
     }
 
@@ -643,8 +692,15 @@ static void * _dave2d_buf_malloc_cb(size_t size, lv_color_format_t color_format)
 
 static void _dave2d_buf_free_cb(void * draw_buf)
 {
-    if (!d2_buf_on_rendering(draw_buf))
+    if (d2_buf_on_rendering(draw_buf))
     {
-        d2_buf_free(draw_buf);
+        /* Buffer is in the GPU tracking list (e.g. p_intermediate_buf for RGB565A8).
+         * d2_buf_clear_cb will free it after the GPU is done with it. */
+        return;
     }
+    /* Buffer is not in the tracking list (e.g. image-cache decoded data).
+     * Synchronize the GPU before freeing to prevent use-after-free if an image
+     * cache eviction occurs while the GPU is still reading this buffer. */
+    d2_finish_rendering();
+    d2_buf_free(draw_buf);
 }

@@ -21,7 +21,7 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * draw_dsc,
+static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
                           const lv_image_decoder_dsc_t * decoder_dsc, lv_draw_image_sup_t * sup,
                           const lv_area_t * img_coords, const lv_area_t * clipped_img_area);
 
@@ -37,14 +37,14 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
  *   GLOBAL FUNCTIONS
  **********************/
 
-void lv_draw_dave2d_image(lv_draw_dave2d_unit_t * draw_unit, const lv_draw_image_dsc_t * draw_dsc,
+void lv_draw_dave2d_image(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
                           const lv_area_t * coords)
 {
     if(!draw_dsc->tile) {
-        lv_draw_image_normal_helper((lv_draw_unit_t *)draw_unit, draw_dsc, coords, img_draw_core);
+        lv_draw_image_normal_helper(t, draw_dsc, coords, img_draw_core, NULL);
     }
     else {
-        lv_draw_image_tiled_helper((lv_draw_unit_t *)draw_unit, draw_dsc, coords, img_draw_core);
+        lv_draw_image_tiled_helper(t, draw_dsc, coords, img_draw_core, NULL);
     }
 }
 
@@ -52,12 +52,12 @@ void lv_draw_dave2d_image(lv_draw_dave2d_unit_t * draw_unit, const lv_draw_image
  *   STATIC FUNCTIONS
  **********************/
 
-static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * draw_dsc,
+static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
                           const lv_image_decoder_dsc_t * decoder_dsc, lv_draw_image_sup_t * sup,
                           const lv_area_t * img_coords, const lv_area_t * clipped_img_area)
 {
 
-    lv_draw_dave2d_unit_t * u = (lv_draw_dave2d_unit_t *)u_base;
+    lv_draw_dave2d_unit_t * u = (lv_draw_dave2d_unit_t *)t->draw_unit;
 
     (void)sup; //remove warning about unused parameter
 
@@ -66,12 +66,15 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
 
     const lv_draw_buf_t * decoded = decoder_dsc->decoded;
     const uint8_t * src_buf = decoded->data;
-#if D2_USE_INTERNAL_RENDERBUFFERS
-    if (decoded->header.flags & LV_IMAGE_FLAGS_ALLOCATED)
-    {
-        d2_buf_add(decoded->data);
-    }
-#endif
+    /* NOTE: Do NOT call d2_buf_add(decoded->data) here.
+     * decoded->data is an image-cache buffer reused across frames. Adding it to the
+     * GPU double-buffer tracking list causes it to be freed by d2_buf_clear_cb in
+     * frame N+1 (when the previous frame's list is rotated), while GPU-N+1 is about
+     * to read the same buffer. This results in a use-after-free and visible flickering.
+     * p_intermediate_buf (for RGB565A8) is still tracked because it is allocated fresh
+     * per call and is not reused across frames.
+     * Instead, _dave2d_buf_free_cb calls d2_finish_rendering() to guarantee GPU sync
+     * before freeing any buffer not in the tracking list. */
 
     const lv_image_header_t * header = &decoded->header;
     uint32_t img_stride = decoded->header.stride;
@@ -88,6 +91,8 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
     d2_u8 current_fill_mode;
     d2_u32 src_blend_mode;
     d2_u32 dst_blend_mode;
+    d2_u32 src_alpha_blend_mode;
+    d2_u32 dst_alpha_blend_mode;
     void * p_intermediate_buf = NULL;
 
 #if LV_USE_OS
@@ -96,23 +101,19 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
     LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
-    buffer_area = u->base_unit.target_layer->buf_area;
+    src_alpha_blend_mode = d2_getalphablendmodesrc(u->d2_handle);
+    dst_alpha_blend_mode = d2_getalphablendmodedst(u->d2_handle);
+
+    buffer_area = t->target_layer->buf_area;
     draw_area = *img_coords;
     clipped_area = *clipped_img_area;
 
-    x = 0 - u->base_unit.target_layer->buf_area.x1;
-    y = 0 - u->base_unit.target_layer->buf_area.y1;
+    x = 0 - t->target_layer->buf_area.x1;
+    y = 0 - t->target_layer->buf_area.y1;
 
     lv_area_move(&draw_area, x, y);
     lv_area_move(&buffer_area, x, y);
     lv_area_move(&clipped_area, x, y);
-
-    /* Generate render operations*/
-#if D2_RENDER_EACH_OPERATION
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
-    d2_selectrenderbuffer(u->d2_handle, u->renderbuffer);
-#endif
-#endif
 
     current_fill_mode = d2_getfillmode(u->d2_handle);
     a_texture_op      = d2_gettextureoperationa(u->d2_handle);
@@ -205,22 +206,22 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
                       (d2_point)D2_FIX4(p1[3].y),
                       0);
 
+#if D2_USE_INTERNAL_RENDERBUFFERS
+        /* The intermediate buffer for RGB565A8 must be fully rendered by the GPU
+         * before the main render reads from it. In batch mode (all tiles in one
+         * display list) the sequential ordering within the list guarantees this.
+         * However the same d2_start_rendering() that was present in 9.2.2 is
+         * kept here so the double-buffer tracking list rotates correctly and
+         * p_intermediate_buf is freed at the right time. */
+        d2_start_rendering();
+#endif
         cf = LV_COLOR_FORMAT_ARGB8888;
         src_buf = p_intermediate_buf;
         img_stride = header->w * lv_color_format_get_size(cf);
 
-#if D2_RENDER_EACH_OPERATION
-#if D2_USE_INTERNAL_RENDERBUFFERS
-        d2_start_rendering();
-#else
-        d2_executerenderbuffer(u->d2_handle, u->renderbuffer, 0);
-        d2_flushframe(u->d2_handle);
-        d2_selectrenderbuffer(u->d2_handle, u->renderbuffer);
-#endif
-#endif
     }
 
-    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, t->target_layer);
 
     d2_cliprect(u->d2_handle, (d2_border)clipped_area.x1, (d2_border)clipped_area.y1, (d2_border)clipped_area.x2,
                 (d2_border)clipped_area.y2);
@@ -231,11 +232,10 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
         d2_settextureoperation(u->d2_handle, d2_to_replace, d2_to_copy, d2_to_copy, d2_to_copy);
     }
     else { //Formats with an alpha channel,
-        d2_settextureoperation(u->d2_handle, d2_to_copy, d2_to_copy, d2_to_copy, d2_to_copy);
+        d2_settextureoperation(u->d2_handle, d2_to_multiply, d2_to_copy, d2_to_copy, d2_to_copy);
     }
 
     if(LV_BLEND_MODE_NORMAL == draw_dsc->blend_mode) { /**< Simply mix according to the opacity value*/
-        d2_setalphablendmode(u->d2_handle, d2_bm_one, d2_bm_one_minus_alpha);
         d2_setblendmode(u->d2_handle, d2_bm_alpha, d2_bm_one_minus_alpha);  //direct linear blend
     }
     else if(LV_BLEND_MODE_ADDITIVE == draw_dsc->blend_mode) { /**< Add the respective color channels*/
@@ -320,23 +320,19 @@ static void img_draw_core(lv_draw_unit_t * u_base, const lv_draw_image_dsc_t * d
                   (d2_point)D2_FIX4(p[3].y),
                   0);
 
-    //
-    // Execute render operations
-    //
-#if D2_RENDER_EACH_OPERATION
-#if D2_USE_INTERNAL_RENDERBUFFERS
-    d2_start_rendering();
-#else
-    d2_executerenderbuffer(u->d2_handle, u->renderbuffer, 0);
-    d2_flushframe(u->d2_handle);
-#endif
-#endif
-
     d2_setfillmode(u->d2_handle, current_fill_mode);
     d2_settextureoperation(u->d2_handle, a_texture_op, r_texture_op, g_texture_op, b_texture_op);
     d2_setblendmode(u->d2_handle, src_blend_mode, dst_blend_mode);
+    d2_setalphablendmode(u->d2_handle, src_alpha_blend_mode, dst_alpha_blend_mode);
 
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
+#if D2_USE_INTERNAL_RENDERBUFFERS
+    /* Render each image tile in its own GPU frame (matching 9.2.2 behaviour with
+     * D2_RENDER_EACH_OPERATION=1). Without this, all tiles accumulate in one
+     * display list and the DAVE2D produces incorrect output for partial/clipped
+     * tiles whose renderquad vertices lie outside the framebuffer bounds
+     * (e.g. the two edge tiles in the moving_wallpaper benchmark). */
+    d2_start_rendering();
+#else
     if(NULL != p_intermediate_buf) {
         lv_free(p_intermediate_buf);
     }
