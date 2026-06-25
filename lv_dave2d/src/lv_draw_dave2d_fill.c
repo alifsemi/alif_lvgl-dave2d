@@ -54,7 +54,7 @@ void lv_draw_dave2d_fill(lv_draw_task_t * t, const lv_draw_fill_dsc_t * dsc, con
             y1 = (float)LV_MIN(coordinates.y1, coordinates.y2);
             y2 = (float)LV_MAX(coordinates.y1, coordinates.y2);
 
-            if(a1 < a2) {
+            if(a1 <= a2) {
                 y0 = 0.0f;//silence the compiler warning
                 y3 = 0.0f;
 
@@ -86,7 +86,7 @@ void lv_draw_dave2d_fill(lv_draw_task_t * t, const lv_draw_fill_dsc_t * dsc, con
             x1 = (float)LV_MIN(coordinates.x1, coordinates.x2);
             x2 = (float)LV_MAX(coordinates.x1, coordinates.x2);
 
-            if(a1 < a2) {
+            if(a1 <= a2) {
                 x0 = 0.0f;//silence the compiler warning
                 x3 = 0.0f;
 

@@ -599,11 +599,17 @@ static d2_s32 lv_dave2d_init(void)
     // Set various D2 parameters
     //
     result = d2_setblendmode(_d2_handle, d2_bm_alpha, d2_bm_one_minus_alpha);
+    LV_ASSERT(D2_OK == result);
     result = d2_setalphamode(_d2_handle, d2_am_constant);
+    LV_ASSERT(D2_OK == result);
     result = d2_setalpha(_d2_handle, UINT8_MAX);
+    LV_ASSERT(D2_OK == result);
     result = d2_setantialiasing(_d2_handle, 1);
+    LV_ASSERT(D2_OK == result);
     result = d2_setlinecap(_d2_handle, d2_lc_butt);
+    LV_ASSERT(D2_OK == result);
     result = d2_setlinejoin(_d2_handle, d2_lj_miter);
+    LV_ASSERT(D2_OK == result);
 
     /* set blocksize for default displaylist */
     result = d2_setdlistblocksize(_d2_handle, 20);
@@ -625,6 +631,7 @@ static d2_s32 lv_dave2d_init(void)
     _label_renderbuffer = d2_newrenderbuffer(_d2_handle, 250, 25);
     if(!_label_renderbuffer) {
         LV_LOG_ERROR("NO renderbuffer");
+        d2_deleterenderbuffer(_d2_handle, _renderbuffer);
         d2_closedevice(_d2_handle);
 
         return D2_NOMEMORY;
