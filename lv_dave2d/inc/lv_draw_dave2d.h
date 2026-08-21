@@ -69,10 +69,8 @@ typedef struct {
 #endif
     uint32_t idx;
     d2_device * d2_handle;
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
     d2_renderbuffer * renderbuffer;
     d2_renderbuffer * label_renderbuffer;
-#endif
 
 #if LV_USE_OS
     lv_mutex_t * pd2Mutex;

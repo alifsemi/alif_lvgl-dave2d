@@ -44,9 +44,7 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
         LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
         d2_selectrenderbuffer(unit->d2_handle, unit->label_renderbuffer);
-#endif
 
         //
         // Generate render operations
@@ -142,16 +140,10 @@ static void lv_draw_dave2d_draw_letter_cb(lv_draw_task_t * t, lv_draw_glyph_dsc_
          * to a specific render buffer, and draw it immediately while the contents
          * are valid.
          */
-#if D2_USE_INTERNAL_RENDERBUFFERS
-        d2_start_rendering();
-#else
         d2_executerenderbuffer(unit->d2_handle, unit->label_renderbuffer, 0);
         d2_flushframe(unit->d2_handle);
-#endif
 
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
         d2_selectrenderbuffer(unit->d2_handle, unit->renderbuffer);
-#endif
 
 #if LV_USE_OS
         status = lv_mutex_unlock(unit->pd2Mutex);

@@ -44,11 +44,7 @@ void d2_buf_free(void * ptr);
 
 void d2_buf_copy(void * ptr, uint32_t size);
 
-void d2_buf_add(void * ptr);
-
 bool d2_buf_on_rendering(void * ptr);
-
-void d2_start_rendering(void);
 
 void d2_finish_rendering(void);
 

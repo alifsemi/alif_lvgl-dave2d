@@ -66,13 +66,11 @@ void dave2d_execute_dlist_and_flush(void);
  **********************/
 
 static d2_device * _d2_handle;
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
 /* Main render buffer, used to carry the block of dave commands for any shape */
 static d2_renderbuffer * _renderbuffer;
 
 /* Label dedicated render buffer, used to carry only label related dave commands */
 static d2_renderbuffer * _label_renderbuffer;
-#endif
 
 static lv_ll_t  draw_tasks_on_dlist;
 static uint32_t draw_pressure = 0;
@@ -114,12 +112,9 @@ void lv_draw_dave2d_init(void)
 #endif
 
     draw_dave2d_unit->d2_handle = _d2_handle;
-#if D2_USE_INTERNAL_RENDERBUFFERS
     d2_utils_init(_d2_handle);
-#else
     draw_dave2d_unit->renderbuffer = _renderbuffer;
     draw_dave2d_unit->label_renderbuffer = _label_renderbuffer;
-#endif
     lv_ll_init(&draw_tasks_on_dlist, sizeof(uintptr_t));
 }
 
@@ -453,16 +448,10 @@ static int32_t lv_draw_dave2d_dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * 
          */
         draw_dave2d_unit->task_act = t;
         draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_IN_PROGRESS;
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
         d2_selectrenderbuffer(_d2_handle, _renderbuffer);
-#endif
         execute_drawing(draw_dave2d_unit);
-#if D2_USE_INTERNAL_RENDERBUFFERS
-        d2_start_rendering();
-#else
         d2_executerenderbuffer(_d2_handle, _renderbuffer, 0);
         d2_flushframe(_d2_handle);
-#endif
         draw_dave2d_unit->task_act->state = LV_DRAW_TASK_STATE_FINISHED;
         draw_dave2d_unit->task_act = NULL;
         lv_draw_dispatch_request();
@@ -484,23 +473,10 @@ static int32_t _dave2d_wait_finish(lv_draw_unit_t * draw_unit)
          * While there is nothing being rendered, prevent the dead lock
          * by flushing the GPU command buffer empty and just return.
          */
-#if D2_USE_INTERNAL_RENDERBUFFERS
-        /* Wait for any in-flight GPU rendering started by a previous d2_start_rendering()
-         * call (e.g. from single-task dispatch path or label rendering). Without this,
-         * LVGL may read the layer buffer before the GPU has finished writing to it.
-         */
-        d2_finish_rendering();
-#endif
         return 0;
     }
     dave2d_execute_dlist_and_flush();
     draw_pressure = 0;
-#if D2_USE_INTERNAL_RENDERBUFFERS
-    /* dave2d_execute_dlist_and_flush() calls d2_start_rendering() which is non-blocking
-     * (d2_startframe). Wait here for GPU completion before LVGL accesses the output buffer.
-     */
-    d2_finish_rendering();
-#endif
 
     return 0;
 }
@@ -613,7 +589,6 @@ static d2_s32 lv_dave2d_init(void)
         return result;
     }
 
-#if (D2_USE_INTERNAL_RENDERBUFFERS == 0)
     _renderbuffer = d2_newrenderbuffer(_d2_handle, 250, 25);
     if(!_renderbuffer) {
         LV_LOG_ERROR("NO renderbuffer");
@@ -635,7 +610,6 @@ static d2_s32 lv_dave2d_init(void)
         LV_LOG_ERROR("Could NOT d2_selectrenderbuffer");
         d2_closedevice(_d2_handle);
     }
-#endif
 
     return result;
 }
@@ -654,9 +628,6 @@ void dave2d_execute_dlist_and_flush(void)
 #endif
 
     // Execute render operations
-#if D2_USE_INTERNAL_RENDERBUFFERS
-    d2_start_rendering();
-#else
     result = d2_executerenderbuffer(_d2_handle, _renderbuffer, 0);
     LV_ASSERT(D2_OK == result);
 
@@ -665,7 +636,6 @@ void dave2d_execute_dlist_and_flush(void)
 
     result = d2_selectrenderbuffer(_d2_handle, _renderbuffer);
     LV_ASSERT(D2_OK == result);
-#endif
 
     while(false == lv_ll_is_empty(&draw_tasks_on_dlist)) {
         p_list_entry = lv_ll_get_tail(&draw_tasks_on_dlist);
@@ -694,8 +664,8 @@ static void _dave2d_buf_free_cb(void * draw_buf)
 {
     if (d2_buf_on_rendering(draw_buf))
     {
-        /* Buffer is in the GPU tracking list (e.g. p_intermediate_buf for RGB565A8).
-         * d2_buf_clear_cb will free it after the GPU is done with it. */
+        /* Buffer is in the GPU tracking list; it will be freed once the GPU
+         * has finished using it. */
         return;
     }
     /* Buffer is not in the tracking list (e.g. image-cache decoded data).

@@ -21,9 +21,6 @@
  *  STATIC PROTOTYPES
  **********************/
 
-static void d2_buf_clear_cb(void * node);
-static void d2_buf_switch(void);
-static void d2_buf_clear(void);
 static bool d2_buf_contains(d2_buf * buf, void * ptr);
 
 /**********************
@@ -32,7 +29,6 @@ static bool d2_buf_contains(d2_buf * buf, void * ptr);
 
 static d2_device * _d2_handle;
 static lv_ll_t _d2_buf_1, _d2_buf_2;
-static lv_ll_t * _d2_buf_act;
 
 /**********************
  *      MACROS
@@ -155,7 +151,6 @@ void d2_utils_init(d2_device * handle)
 {
     lv_ll_init(&_d2_buf_1, sizeof(void *));
     lv_ll_init(&_d2_buf_2, sizeof(void *));
-    _d2_buf_act = &_d2_buf_1;
     _d2_handle = handle;
 }
 
@@ -175,28 +170,9 @@ void d2_buf_copy(void * ptr, uint32_t size)
     d1_copytovidmem(d2_level1interface(_d2_handle), ptr, ptr, size, 0);
 }
 
-void d2_buf_add(void * ptr)
-{
-    void ** new_node = lv_ll_ins_tail(_d2_buf_act);
-    *new_node = ptr;
-}
-
 bool d2_buf_on_rendering(void * ptr)
 {
     return d2_buf_contains(&_d2_buf_1, ptr) || d2_buf_contains(&_d2_buf_2, ptr);
-}
-
-void d2_start_rendering(void)
-{
-    // Wait for previous rendering to finish
-    d2_endframe(_d2_handle);
-
-    // Switch and clear buf
-    d2_buf_switch();
-    d2_buf_clear();
-
-    // Execute the next render buffer
-    d2_startframe(_d2_handle);
 }
 
 void d2_finish_rendering(void)
@@ -207,23 +183,6 @@ void d2_finish_rendering(void)
 /**********************
  *   STATIC FUNCTIONS
  **********************/
-
-static void d2_buf_clear_cb(void * node)
-{
-    lv_ll_remove(_d2_buf_act, node);
-    d1_freevidmem(d2_level1interface(_d2_handle), d1_mem_any, *(void **)node);
-    lv_free(node);
-}
-
-static void d2_buf_switch(void)
-{
-    _d2_buf_act = _d2_buf_act == &_d2_buf_1 ? &_d2_buf_2 : &_d2_buf_1;
-}
-
-static void d2_buf_clear(void)
-{
-    lv_ll_clear_custom(_d2_buf_act, d2_buf_clear_cb);
-}
 
 static bool d2_buf_contains(d2_buf * buf, void * ptr)
 {

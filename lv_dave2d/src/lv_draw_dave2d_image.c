@@ -66,15 +66,8 @@ static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_d
 
     const lv_draw_buf_t * decoded = decoder_dsc->decoded;
     const uint8_t * src_buf = decoded->data;
-    /* NOTE: Do NOT call d2_buf_add(decoded->data) here.
-     * decoded->data is an image-cache buffer reused across frames. Adding it to the
-     * GPU double-buffer tracking list causes it to be freed by d2_buf_clear_cb in
-     * frame N+1 (when the previous frame's list is rotated), while GPU-N+1 is about
-     * to read the same buffer. This results in a use-after-free and visible flickering.
-     * p_intermediate_buf (for RGB565A8) is still tracked because it is allocated fresh
-     * per call and is not reused across frames.
-     * Instead, _dave2d_buf_free_cb calls d2_finish_rendering() to guarantee GPU sync
-     * before freeing any buffer not in the tracking list. */
+    /* _dave2d_buf_free_cb calls d2_finish_rendering() to guarantee GPU sync before
+     * freeing a buffer, preventing use-after-free on reused image-cache data. */
 
     const lv_image_header_t * header = &decoded->header;
     uint32_t img_stride = decoded->header.stride;
@@ -141,12 +134,7 @@ static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_d
         d2_s32 dyv1 = D2_FIX16(1);
 
         uint32_t size = header->h * (header->w * lv_color_format_get_size(LV_COLOR_FORMAT_ARGB8888));
-#if D2_USE_INTERNAL_RENDERBUFFERS
-        p_intermediate_buf = d2_buf_alloc(size);
-        d2_buf_add(p_intermediate_buf);
-#else
         p_intermediate_buf = lv_malloc(size);
-#endif
 
         d2_framebuffer(u->d2_handle,
                        p_intermediate_buf,
@@ -206,15 +194,6 @@ static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_d
                       (d2_point)D2_FIX4(p1[3].y),
                       0);
 
-#if D2_USE_INTERNAL_RENDERBUFFERS
-        /* The intermediate buffer for RGB565A8 must be fully rendered by the GPU
-         * before the main render reads from it. In batch mode (all tiles in one
-         * display list) the sequential ordering within the list guarantees this.
-         * However the same d2_start_rendering() that was present in 9.2.2 is
-         * kept here so the double-buffer tracking list rotates correctly and
-         * p_intermediate_buf is freed at the right time. */
-        d2_start_rendering();
-#endif
         cf = LV_COLOR_FORMAT_ARGB8888;
         src_buf = p_intermediate_buf;
         img_stride = header->w * lv_color_format_get_size(cf);
@@ -325,18 +304,9 @@ static void img_draw_core(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_d
     d2_setblendmode(u->d2_handle, src_blend_mode, dst_blend_mode);
     d2_setalphablendmode(u->d2_handle, src_alpha_blend_mode, dst_alpha_blend_mode);
 
-#if D2_USE_INTERNAL_RENDERBUFFERS
-    /* Render each image tile in its own GPU frame (matching 9.2.2 behaviour with
-     * D2_RENDER_EACH_OPERATION=1). Without this, all tiles accumulate in one
-     * display list and the DAVE2D produces incorrect output for partial/clipped
-     * tiles whose renderquad vertices lie outside the framebuffer bounds
-     * (e.g. the two edge tiles in the moving_wallpaper benchmark). */
-    d2_start_rendering();
-#else
     if(NULL != p_intermediate_buf) {
         lv_free(p_intermediate_buf);
     }
-#endif
 
 #if LV_USE_OS
     status = lv_mutex_unlock(u->pd2Mutex);

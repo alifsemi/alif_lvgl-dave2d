@@ -258,9 +258,6 @@ void lv_draw_dave2d_fill(lv_draw_task_t * t, const lv_draw_fill_dsc_t * dsc, con
                                   (d2_width)D2_FIX4(lv_area_get_width(&coordinates) - (2 * radius)),
                                   (d2_width)D2_FIX4(lv_area_get_height(&coordinates)));
             LV_ASSERT(D2_OK == result);
-#if D2_USE_INTERNAL_RENDERBUFFERS
-            d2_start_rendering();
-#endif
 
             result = d2_renderbox(u->d2_handle,
                                   (d2_width)D2_FIX4(coordinates.x1),
